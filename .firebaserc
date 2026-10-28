@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "demo-kotahouse",
+    "dev": "kotahouse-dev",
+    "prod": "kotahouse-prod"
+  }
+}

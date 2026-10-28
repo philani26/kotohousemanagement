@@ -1,0 +1,56 @@
+{
+  "name": "kotahouse",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "test:domain": "npm --prefix functions test",
+    "build:functions": "npm --prefix functions run build",
+    "emulators": "firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data",
+    "start:dev": "ng serve --configuration dev",
+    "build:dev": "ng build --configuration production,dev",
+    "build:prod": "ng build --configuration production",
+    "deploy:dev": "node scripts/check-env.mjs dev && npm run build:dev && firebase deploy --project dev",
+    "deploy:prod": "node scripts/check-env.mjs prod && npm run build:prod && firebase deploy --project prod",
+    "local": "powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1"
+  },
+  "prettier": {
+    "printWidth": 100,
+    "singleQuote": true,
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular"
+        }
+      }
+    ]
+  },
+  "private": true,
+  "packageManager": "npm@10.9.0",
+  "dependencies": {
+    "@angular/common": "^21.0.0",
+    "@angular/compiler": "^21.0.0",
+    "@angular/core": "^21.0.0",
+    "@angular/forms": "^21.0.0",
+    "@angular/platform-browser": "^21.0.0",
+    "@angular/router": "^21.0.0",
+    "@angular/service-worker": "^21.2.25",
+    "chart.js": "^4.5.0",
+    "firebase": "^12.4.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.0.2",
+    "@angular/cli": "^21.0.2",
+    "@angular/compiler-cli": "^21.0.0",
+    "@types/node": "^20.17.19",
+    "jsdom": "^27.1.0",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8"
+  }
+}

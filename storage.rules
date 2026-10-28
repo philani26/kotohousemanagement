@@ -1,0 +1,24 @@
+rules_version = '2';
+
+// Receipt images: staff upload into their own folder, cannot overwrite or
+// delete, and only owners (or the uploader) can view them.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /businesses/{b}/receipts/{uid}/{file} {
+      function roleIn() {
+        return request.auth.token.get('biz', {}).get(b,
+          request.auth.token.get('businessId', '') == b ? request.auth.token.get('role', '') : '');
+      }
+      function inBusiness() { return request.auth != null && roleIn() in ['owner', 'employee']; }
+      allow read: if inBusiness() && (roleIn() == 'owner' || request.auth.uid == uid);
+      allow create: if inBusiness()
+        && request.auth.uid == uid
+        && request.resource.size < 5 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+      allow update, delete: if false;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

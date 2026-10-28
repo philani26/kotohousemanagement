@@ -1,0 +1,29 @@
+{
+  "name": "kotahouse-functions",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "test": "vitest run src/shared",
+    "test:rules": "firebase --config ../firebase.test.json emulators:exec --only firestore,storage --project demo-kotahouse \"vitest run test/rules\"",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "test:integration": "npm run build && firebase --config ../firebase.test.json emulators:exec --only auth,firestore,functions --project demo-kotahouse \"vitest run test/integration\"",
+    "test:all": "npm test && npm run test:rules && npm run test:integration"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.5.0",
+    "firebase-functions": "^7.0.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "firebase": "^12.4.0",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8"
+  }
+}

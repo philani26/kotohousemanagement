@@ -1,0 +1,9 @@
+{
+  "name": "Kota House",
+  "short_name": "Kota House",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f2ec",
+  "theme_color": "#1f1a17",
+  "icons": [{ "src": "favicon.ico", "sizes": "48x48", "type": "image/x-icon" }]
+}

@@ -1,0 +1,196 @@
+rules_version = '2';
+
+// Kota House security model
+// - Identity and role come ONLY from custom claims set by Cloud Functions.
+//   `biz` maps every shop the user belongs to → their role there (an owner can
+//   run several kota houses); `businessId`/`role` is the legacy single shop.
+//   Users cannot write claims or their own role.
+// - Sales, cash, stock ledger, expenses, approvals, audit logs and stats are
+//   written exclusively by trusted Cloud Functions (Admin SDK bypasses rules).
+// - Owners may edit catalogue data directly; every write must stamp
+//   updatedBy/updatedAt so the audit trigger can attribute it.
+// - Nothing financial can be deleted from a client.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function claims() { return request.auth.token; }
+    function bizMap() { return claims().get('biz', {}); }
+    function roleIn(b) {
+      return bizMap().get(b, claims().get('businessId', '') == b ? claims().get('role', '') : '');
+    }
+    function inBusiness(b) { return signedIn() && roleIn(b) in ['owner', 'employee']; }
+    function isOwner(b) { return signedIn() && roleIn(b) == 'owner'; }
+    function isStaff(b) { return inBusiness(b); }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+
+    function stamped() {
+      return request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+    }
+    function isMoney(v) { return v is int && v >= 0 && v <= 100000000; }
+    function isQty(v) { return (v is int || v is float) && v >= 0 && v <= 1000000; }
+    function nonEmpty(s, max) { return s is string && s.size() > 0 && s.size() <= max; }
+
+    // users/{uid} – read-only mirror of claims
+    match /users/{uid} {
+      allow read: if isSelf(uid);
+      allow write: if false;
+    }
+
+    // Email queue for the Trigger Email extension – backend only
+    match /mail/{id} {
+      allow read, write: if false;
+    }
+
+    match /businesses/{b} {
+      allow read: if isStaff(b);
+      allow write: if false;
+
+      match /businessSettings/{id} {
+        allow read: if isStaff(b);
+        allow create: if false;
+        allow update: if isOwner(b) && stamped()
+          && request.resource.data.currency == 'ZAR'
+          && request.resource.data.maxEmployeeDiscountPercent is number
+          && request.resource.data.maxEmployeeDiscountPercent >= 0
+          && request.resource.data.maxEmployeeDiscountPercent <= 100
+          && request.resource.data.expenseCategories is list
+          && request.resource.data.get('productCategories', []) is list
+          && request.resource.data.get('productCategories', []).size() <= 40
+          && request.resource.data.thresholds is map;
+        allow delete: if false;
+      }
+
+      match /products/{id} {
+        allow read: if isStaff(b);
+        allow create, update: if isOwner(b) && stamped()
+          && nonEmpty(request.resource.data.name, 60)
+          && isMoney(request.resource.data.priceCents)
+          && request.resource.data.active is bool
+          && nonEmpty(request.resource.data.category, 40);
+        allow delete: if false; // deactivate instead – history refers to products
+      }
+
+      match /recipes/{productId} {
+        allow read: if isStaff(b);
+        allow create, update: if isOwner(b) && stamped()
+          && request.resource.data.productId == productId
+          && request.resource.data.lines is list
+          && request.resource.data.lines.size() <= 30;
+        allow delete: if false;
+      }
+
+      match /ingredients/{id} {
+        allow read: if isStaff(b);
+        // Opening balance is set once; afterwards only the backend moves stock.
+        allow create: if isOwner(b) && stamped()
+          && nonEmpty(request.resource.data.name, 60)
+          && isQty(request.resource.data.openingQty)
+          && request.resource.data.currentQty == request.resource.data.openingQty
+          && isMoney(request.resource.data.unitCostCents)
+          && isQty(request.resource.data.reorderLevel);
+        allow update: if isOwner(b) && stamped()
+          && request.resource.data.currentQty == resource.data.currentQty
+          && request.resource.data.openingQty == resource.data.openingQty
+          && nonEmpty(request.resource.data.name, 60)
+          && isMoney(request.resource.data.unitCostCents)
+          && isQty(request.resource.data.reorderLevel);
+        allow delete: if false;
+      }
+
+      match /suppliers/{id} {
+        allow read: if isStaff(b);
+        allow create, update: if isOwner(b) && stamped() && nonEmpty(request.resource.data.name, 80);
+        allow delete: if false;
+      }
+
+      match /employees/{uid} {
+        allow read: if isOwner(b) || (isStaff(b) && isSelf(uid));
+        allow write: if false;
+      }
+
+      // Employees see their own records only; owners see everything.
+      match /sales/{id} {
+        allow read: if isOwner(b) || (isStaff(b) && resource.data.employeeId == request.auth.uid);
+        allow write: if false;
+      }
+
+      match /shifts/{id} {
+        // Staff can see whether a shift is open (single till) and their own history.
+        allow read: if isOwner(b)
+          || (isStaff(b) && (resource.data.employeeId == request.auth.uid || resource.data.status == 'open'));
+        allow write: if false;
+      }
+
+      // Blind cash count: employees never see the expected balance.
+      match /cashSessions/{id} {
+        allow read: if isOwner(b);
+        allow write: if false;
+      }
+
+      match /expenses/{id} {
+        allow read: if isOwner(b) || (isStaff(b) && resource.data.submittedBy == request.auth.uid);
+        allow write: if false;
+      }
+
+      match /approvals/{id} {
+        allow read: if isOwner(b) || (isStaff(b) && resource.data.requestedBy == request.auth.uid);
+        allow write: if false;
+      }
+
+      match /stockMovements/{id} {
+        allow read: if isOwner(b) || (isStaff(b) && resource.data.createdBy == request.auth.uid);
+        allow write: if false;
+      }
+
+      match /purchases/{id} {
+        allow read: if isOwner(b) || (isStaff(b) && resource.data.createdBy == request.auth.uid);
+        allow write: if false;
+      }
+
+      // Kitchen tickets: no prices. Staff create them at the till and may only
+      // move the status along; items and notes cannot be edited afterwards.
+      match /orders/{id} {
+        function validStatus(s) { return s in ['new', 'preparing', 'ready', 'collected']; }
+        allow read: if isStaff(b);
+        allow create: if isStaff(b)
+          && request.resource.data.keys().hasOnly(['id', 'receiptNo', 'lines', 'note', 'status', 'createdAtMillis', 'createdBy', 'createdByName', 'dayKey', 'updatedBy', 'updatedAt'])
+          && request.resource.data.id == id
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.status == 'new'
+          && request.resource.data.lines is list
+          && request.resource.data.lines.size() > 0
+          && request.resource.data.lines.size() <= 30
+          && request.resource.data.createdAtMillis is int
+          && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 200));
+        allow update: if isStaff(b)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'receiptNo', 'preparingAt', 'readyAt', 'collectedAt', 'updatedBy', 'updatedAt'])
+          && validStatus(request.resource.data.status)
+          && request.resource.data.updatedBy == request.auth.uid;
+        allow delete: if false;
+      }
+
+      match /auditLogs/{id} {
+        allow read: if isOwner(b);
+        allow write: if false;
+      }
+
+      match /dailyStats/{day} {
+        allow read: if isOwner(b);
+        allow write: if false;
+      }
+
+      match /notifications/{id} {
+        allow read: if isOwner(b);
+        // Owners may only mark notifications as read.
+        allow update: if isOwner(b)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+          && request.resource.data.read is bool;
+        allow create, delete: if false;
+      }
+    }
+  }
+}
