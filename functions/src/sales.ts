@@ -2,6 +2,7 @@ import { onCall } from 'firebase-functions/v2/https';
 import { ApiRequest, ApiResponse } from './shared/api';
 import { DomainError, clampStockChange, discountPercent, ingredientUsage, isLowStock, localHour, priceCart, requireText, resolveSoldAt, settlePayment, paymentParts, paymentLabel, cashPartCents } from './shared/domain';
 import { Customer, loyaltyOutcome, normalisePhone } from './shared/loyalty';
+import { YocoCheckout, checkoutProblem } from './shared/yoco';
 import { formatZar } from './shared/money';
 import { CashSession, Ingredient, PAYMENT_METHODS, Product, Recipe, Sale } from './shared/models';
 import {
@@ -75,6 +76,10 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
 
       const settings = await readSettings(b, tx);
       const business = await tx.get(bizRef(b));
+      const yocoId = d.payment.yocoCheckoutId ? String(d.payment.yocoCheckoutId) : null;
+      if (yocoId && d.payment.method !== 'card') fail('invalid-argument', 'A Yoco payment is a card payment');
+      const yocoRef = yocoId ? col(b, 'yocoCheckouts').doc(yocoId) : null;
+      const yocoCheckout = yocoRef ? ((await tx.get(yocoRef)).data() as YocoCheckout | undefined) : undefined;
       const customerRef = customerPhone ? col(b, 'customers').doc(customerPhone) : null;
       const customer = customerRef ? (((await tx.get(customerRef)).data() as Customer | undefined) ?? null) : null;
 
@@ -96,6 +101,11 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
       const priced = { ...cart, discountCents: cart.discountCents + loyalty.rewardCents, totalCents: cart.totalCents - loyalty.rewardCents };
       const payment = settlePayment(d.payment.method, priced.totalCents, d.payment.amountReceivedCents, d.payment.cashCents);
       const parts = paymentParts(payment, priced.totalCents);
+      if (yocoRef) {
+        const cardPart = parts.find((p) => p.method === 'card')?.amountCents ?? 0;
+        const problem = checkoutProblem(yocoCheckout, d.saleId, cardPart);
+        if (problem) throw new DomainError(problem);
+      }
       const paidBy = paymentLabel(payment);
       const { usage, costCents } = ingredientUsage(priced.lines, recipes, ingredients);
 
@@ -118,13 +128,20 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
         ...(customerPhone ? { customerPhone, ...(customerName || customer?.name ? { customerName: customerName || customer?.name } : {}) } : {}),
         ...(loyalty.rewardCents ? { rewardCents: loyalty.rewardCents } : {}),
         costCents,
-        payment: { ...payment, ...(reference ? { reference } : {}), verified: payment.method === 'cash' },
+        payment: {
+          ...payment,
+          ...(reference ? { reference } : {}),
+          // a Yoco payment was confirmed by Yoco's webhook, so it is verified straight away
+          ...(yocoCheckout ? { reference: yocoCheckout.paymentId || yocoCheckout.id, yocoCheckoutId: yocoCheckout.id } : {}),
+          verified: payment.method === 'cash' || !!yocoCheckout,
+        },
         status: 'completed',
         dayKey,
         ...(soldAt.offline ? { offline: true } : {}),
       };
       tx.set(saleRef, { ...sale, soldAt: Timestamp.fromDate(now), createdAt: FieldValue.serverTimestamp() });
       tx.update(bizRef(b), { receiptCounter: receiptNo });
+      if (yocoRef) tx.update(yocoRef, { usedBySale: d.saleId });
       if (customerRef && customerPhone) {
         tx.set(customerRef, {
           phone: customerPhone,

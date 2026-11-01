@@ -239,6 +239,13 @@ service cloud.firestore {
         allow list: if isOwner(b);
         allow write: if false;
       }
+      // Yoco card-on-phone payments: written by functions; the till watches its own checkout.
+      // Keys live in private/yoco, which has no rule and so can't be read by anyone in the app.
+      match /yocoCheckouts/{id} {
+        allow get: if isStaff(b);
+        allow list: if isOwner(b);
+        allow write: if false;
+      }
       // Time clock: written by functions; staff read their own entries, the owner reads all.
       match /timeEntries/{id} {
         allow read: if isOwner(b) || (canSeeShop(b) && resource.data.uid == request.auth.uid);

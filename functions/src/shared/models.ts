@@ -2,6 +2,7 @@ import { Cents } from './money';
 import { DEFAULT_GEOFENCE, GeofenceSettings } from './geo';
 import { DEFAULT_DEVICE_SETTINGS, DeviceSettings } from './devices';
 import { DEFAULT_LOYALTY, LoyaltySettings } from './loyalty';
+import { DEFAULT_YOCO, YocoSettings } from './yoco';
 
 /**
  * Firestore data model. Every business-owned collection lives under
@@ -66,6 +67,8 @@ export const COLLECTIONS = {
   activity: 'activity',
   timeEntries: 'timeEntries',
   customers: 'customers',
+  yocoCheckouts: 'yocoCheckouts',
+  private: 'private',
   deviceInvites: 'deviceInvites',
 } as const;
 
@@ -253,6 +256,8 @@ export interface SalePayment {
   changeCents?: Cents; // cash and split payments
   reference?: string; // card slip / EFT reference
   verified?: boolean; // card/EFT matched against bank or terminal records
+  /** card part paid on the customer's phone through Yoco */
+  yocoCheckoutId?: string;
   verifiedBy?: string;
   verifiedAt?: TimestampLike;
 }
@@ -557,6 +562,8 @@ export interface BusinessSettings {
   devices: DeviceSettings;
   /** stamp card for regular customers */
   loyalty: LoyaltySettings;
+  /** card payment on the customer's phone; set by the connectYoco function */
+  yoco: YocoSettings;
   /** customers order on WhatsApp; needs a WhatsApp Business Platform number (docs/WHATSAPP.md) */
   whatsapp: {
     ordering: boolean;
@@ -652,5 +659,6 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   geofence: DEFAULT_GEOFENCE,
   devices: DEFAULT_DEVICE_SETTINGS,
   loyalty: DEFAULT_LOYALTY,
+  yoco: DEFAULT_YOCO,
   cctv: { provider: '', viewerUrl: '', androidAppUrl: '', iosAppUrl: '', notes: '' },
 };

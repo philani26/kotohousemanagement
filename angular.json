@@ -33,6 +33,9 @@
             "styles": [
               "src/styles.scss",
               "src/theme.scss"
+            ],
+            "allowedCommonJsDependencies": [
+              "qrcode"
             ]
           },
           "configurations": {

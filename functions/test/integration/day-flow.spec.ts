@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 /**
  * End-to-end test of a full trading day against the emulators, calling the
  * real Cloud Functions through the client SDK exactly as the app does.
@@ -593,6 +594,46 @@ describe('a trading day', () => {
     // cashiers look up one number, only the owner lists everyone
     await getDoc(doc(cashier.db, bpath('customers', '27825550001')));
     await expect(getDocs(collection(cashier.db, bpath('customers')))).rejects.toThrow();
+  });
+
+  it("takes card payments on the customer's phone through Yoco, only once Yoco confirms them", async () => {
+    const inB2 = { businessId: b2 } as Record<string, unknown>;
+    await expect(owner.call('connectYoco', { secretKey: 'pk_test_123', ...inB2 } as never)).rejects.toThrow(/sk_live_ or sk_test_/);
+    expect(await owner.call('connectYoco', { secretKey: 'sk_test_abcdefghijkl', ...inB2 } as never)).toEqual({ mode: 'test' });
+    // the key is out of reach of every app user, even the owner
+    await expect(getDoc(doc(owner.db, 'businesses', b2, 'private', 'yoco'))).rejects.toThrow();
+
+    const prod = doc(collection(owner.db, 'businesses', b2, 'products'));
+    await setDoc(prod, { id: prod.id, name: 'Card Kota', category: 'kota', priceCents: 4500, active: true, sortOrder: 4, ...stamp(ownerUid) });
+    const saleId = `yoco${run}abcdefghijk`;
+    const sale = { saleId, items: [{ productId: prod.id, quantity: 1 }], ...inB2 };
+    const { checkoutId, redirectUrl } = await owner.call('createYocoCheckout', { saleId, amountCents: 4500, ...inB2 } as never);
+    expect(redirectUrl).toContain(checkoutId);
+    expect((await owner.call('createYocoCheckout', { saleId, amountCents: 4500, ...inB2 } as never)).checkoutId).toBe(checkoutId);
+    await expect(owner.call('recordSale', { ...sale, payment: { method: 'card', yocoCheckoutId: checkoutId } } as never)).rejects.toThrow(/not finished paying/);
+
+    // Yoco's webhook: signed events only
+    const post = (body: string, headers: Record<string, string>) =>
+      fetch(`http://127.0.0.1:${FUNCTIONS_PORT}/${PROJECT}/africa-south1/yocoWebhook?b=${b2}`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body });
+    const event = (amount: number) => JSON.stringify({ id: 'evt_1', type: 'payment.succeeded', payload: { id: 'p_123', amount, status: 'succeeded', mode: 'test', type: 'payment', metadata: { checkoutId } } });
+    const signed = (body: string) => {
+      const ts = String(Math.floor(Date.now() / 1000));
+      const key = Buffer.from('kotahouse-emulator-yoco');
+      return { 'webhook-id': 'msg_1', 'webhook-timestamp': ts, 'webhook-signature': `v1,${createHmac('sha256', key).update(`msg_1.${ts}.${body}`).digest('base64')}` };
+    };
+    expect((await post(event(4500), { 'webhook-id': 'msg_1', 'webhook-timestamp': '1', 'webhook-signature': 'v1,forged' })).status).toBe(403);
+    expect((await post(event(4500), signed(event(4500)))).status).toBe(200);
+    const checkout = (await getDoc(doc(owner.db, 'businesses', b2, 'yocoCheckouts', checkoutId))).data()!;
+    expect(checkout['status']).toBe('paid');
+
+    const res = await owner.call('recordSale', { ...sale, payment: { method: 'card', yocoCheckoutId: checkoutId } } as never);
+    expect(res.totalCents).toBe(4500);
+    const recorded = (await getDoc(doc(owner.db, 'businesses', b2, 'sales', saleId))).data() as Sale;
+    expect(recorded.payment).toMatchObject({ method: 'card', verified: true, reference: 'p_123', yocoCheckoutId: checkoutId });
+    // one payment can't pay for a second sale
+    await expect(
+      owner.call('recordSale', { ...sale, saleId: `yoco2${run}abcdefghij`, payment: { method: 'card', yocoCheckoutId: checkoutId } } as never),
+    ).rejects.toThrow(/another sale|already used/);
   });
 
   it('keeps a time clock: staff clock in and out, the owner fixes a forgotten clock-out', async () => {

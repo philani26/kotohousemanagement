@@ -7,6 +7,7 @@ import { currentPosition } from '../../core/site-check.service';
 import { centsToRandString, parseRandToCents } from '@shared/money';
 import { BusinessService } from '../../core/business.service';
 import { ToastService } from '../../core/toast.service';
+import { ApiService } from '../../core/api.service';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -170,6 +171,37 @@ const lines = (t: string) => t.split('\n').map((x) => x.trim()).filter(Boolean);
       <label class="check"><input type="checkbox" name="geo" [(ngModel)]="siteEnabled" /> Only allow staff to work at the shop</label>
       <button class="btn primary" style="margin-top: .5rem" [disabled]="siteBusy()">Save work site</button>
     </form>
+
+    <form class="card" style="margin-top: 1rem" (ngSubmit)="connectYoco()">
+      <div class="card-head">
+        <h2>📱 Card payment on the customer's phone (Yoco)</h2>
+        <span class="badge" [class.ok]="biz.settings().yoco.enabled">
+          {{ biz.settings().yoco.enabled ? (biz.settings().yoco.mode === 'live' ? 'Connected' : 'Connected – TEST mode') : 'Not connected' }}
+        </span>
+      </div>
+      <p class="small muted">
+        The till shows a QR code; the customer scans it and pays by card (or instant EFT) on their own phone. The sale completes by itself
+        when Yoco confirms the payment, already verified – no slip numbers to type. Useful when the card machine is flat or offline, and for
+        bigger orders. Your normal Yoco card machine keeps working as before.
+      </p>
+      <p class="small muted">
+        In the Yoco app open the <strong>Checkout API</strong> integration and tap <strong>How to connect</strong> to see your keys. Copy the
+        <strong>secret key</strong>: <code>sk_test_</code> to try it with test cards first, then <code>sk_live_</code> (Yoco unlocks live keys
+        once you verify a domain there – use <code>{{ host }}</code>). It is stored on the server only –
+        nobody can read it back in the app.
+      </p>
+      <div class="row" style="gap: .5rem; align-items: flex-end">
+        <label class="field" style="flex: 1; min-width: 240px; margin: 0"><span>Yoco secret key</span>
+          <input name="yocoKey" type="password" autocomplete="off" [(ngModel)]="yocoKey" placeholder="sk_live_…" /></label>
+        <button class="btn primary" [disabled]="yocoBusy() || !yocoKey.trim()">{{ biz.settings().yoco.enabled ? 'Replace key' : 'Connect' }}</button>
+        @if (biz.settings().yoco.enabled) {
+          <button type="button" class="btn" [disabled]="yocoBusy()" (click)="disconnectYoco()">Disconnect</button>
+        }
+      </div>
+      <p class="tiny" style="margin-top: .5rem">
+        Linking Yoco card <em>machines</em> directly isn't possible from a web app: Yoco only allows that from approved Android/iOS apps.
+      </p>
+    </form>
   `,
 })
 export class SettingsPage {
@@ -178,6 +210,37 @@ export class SettingsPage {
   protected readonly days = DAYS;
   protected readonly busy = signal(false);
   protected readonly form = signal<Form | null>(null);
+  private readonly api = inject(ApiService);
+
+  // ---- Yoco ----
+  protected yocoKey = '';
+  protected readonly host = typeof location === 'undefined' ? '' : location.host;
+  protected readonly yocoBusy = signal(false);
+
+  async connectYoco() {
+    this.yocoBusy.set(true);
+    try {
+      const res = await this.api.call('connectYoco', { secretKey: this.yocoKey.trim() });
+      this.yocoKey = '';
+      this.toast.ok(res.mode === 'live' ? 'Yoco connected' : 'Yoco connected in TEST mode – use Yoco test cards');
+    } catch (err) {
+      this.toast.error(err);
+    } finally {
+      this.yocoBusy.set(false);
+    }
+  }
+
+  async disconnectYoco() {
+    this.yocoBusy.set(true);
+    try {
+      await this.api.call('disconnectYoco', {});
+      this.toast.ok('Yoco disconnected');
+    } catch (err) {
+      this.toast.error(err);
+    } finally {
+      this.yocoBusy.set(false);
+    }
+  }
 
   // ---- work site (geofence) ----
   protected siteLat = '';

@@ -43,7 +43,8 @@ export interface Api {
       discountCents?: Cents;
       discountReason?: string;
       /** split payments: cashCents in cash, the rest by method (card/EFT) */
-      payment: { method: PaymentMethod; amountReceivedCents?: Cents; cashCents?: Cents; reference?: string };
+      /** yocoCheckoutId: card part paid on the customer's phone (Yoco), checked on the server */
+      payment: { method: PaymentMethod; amountReceivedCents?: Cents; cashCents?: Cents; reference?: string; yocoCheckoutId?: string };
       /** loyalty: the customer's mobile number, their name (first visit) and whether to use a full stamp card */
       customer?: { phone: string; name?: string; redeemReward?: boolean };
       /** set by the offline queue: when the sale was rung up on the device */
@@ -103,6 +104,9 @@ export interface Api {
   ];
   createDeviceInvite: [{ label: string }, { code: string; expiresAtMillis: number }];
   pairDevice: [{ code: string; deviceId: string; userAgent: string }, { status: DeviceStatus; label: string }];
+  connectYoco: [{ secretKey: string }, { mode: 'live' | 'test' }];
+  disconnectYoco: [Record<string, never>, { ok: true }];
+  createYocoCheckout: [{ saleId: string; amountCents: Cents }, { checkoutId: string; redirectUrl: string }];
   clockIn: [Record<string, never>, { entryId: string; clockInMillis: number; alreadyIn: boolean }];
   clockOut: [Record<string, never>, { minutes: number }];
   fixTimeEntry: [{ entryId: string; clockOutMillis: number; reason: string }, { ok: true }];

@@ -12,6 +12,7 @@
    - **Cash:** type what the customer gave, or tap *Exact*, *R50*, *R100* or *R200*. The app shows the change.
    - **Card:** take the payment on the card machine first. You can type the slip number.
    - **EFT:** only hand over the food when the payment is confirmed.
+   - **Card on the customer's phone (Yoco, if the owner connected it):** on the Card screen tap **📱 Customer pays on their phone**. The customer scans the QR code and pays on their phone; the sale completes by itself when Yoco confirms it. Use it when the card machine is flat or offline. Don't hand over the food until the screen says *Paid*.
    - **Part cash, part card (or EFT):** choose **Cash**, type the cash the customer hands over, then tap **Rest by card** (or **Rest by EFT**) and take the rest on the machine. The cash goes in the till and counts towards the cash-up; the card part is checked against the card machine total.
 3. **Complete sale**. Then tap **Print receipt** or **WhatsApp receipt** if the customer wants one.
 4. **No internet (load-shedding, no data)?** Keep selling. Each sale is saved on the phone, and an orange **Offline** label shows how many are waiting. They send by themselves when the internet is back, and are never recorded twice. Don't clear the browser or sign out until they've sent. You can't close the shift until they're through.
@@ -109,6 +110,9 @@ Give the person who prepares food a **Kitchen** login (**Staff** → Role: *Kitc
 
 ### Customers and the stamp card
 **Customers** (owner menu): switch the stamp card on and choose how many stamps earn a reward, how much a sale must be to earn a stamp and how much the reward takes off (e.g. 9 stamps, R30, R40 = "buy 9 kotas, the 10th is free"). The list shows every customer's visits, spend, stamps and rewards used, with **⬇ CSV**. The server checks the stamps, so a cashier can't give a reward that wasn't earned. Rewards count as discounts in reports. Cashiers can look up one number at the till but can't see the list.
+
+### Card payments on the customer's phone (Yoco)
+**Settings › Card payment on the customer's phone**: paste the **secret key** from the Yoco app (Checkout API integration → *How to connect*). Start with the `sk_test_` key and pay with Yoco's test cards; switch to the `sk_live_` key when it works. The key stays on the server. These sales are marked *Verified* automatically, because Yoco confirmed them. The card machine itself can't be linked to a web app; Yoco only allows that from approved Android/iOS apps.
 
 ### Staff hours (for wages)
 **Hours** shows each worker's hours, days and clock-ins for the week (use ← → for other weeks). **⬇ CSV** downloads them for wages. A clock-in left open for more than 14 hours shows **Forgot to clock out?**: tap **Clock out**, set the real time and give a reason. Corrections are kept in the Activity log.

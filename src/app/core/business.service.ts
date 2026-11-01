@@ -32,6 +32,7 @@ export class BusinessService {
       geofence: { ...DEFAULT_SETTINGS.geofence, ...(s?.geofence ?? {}) },
       devices: { ...DEFAULT_SETTINGS.devices, ...(s?.devices ?? {}) },
       loyalty: cleanLoyalty(s?.loyalty),
+      yoco: { ...DEFAULT_SETTINGS.yoco, ...(s?.yoco ?? {}) },
     };
   });
 

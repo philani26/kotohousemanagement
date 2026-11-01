@@ -70,6 +70,7 @@ export function withSettingsDefaults(data: Partial<BusinessSettings> | undefined
     geofence: { ...DEFAULT_SETTINGS.geofence, ...(data?.geofence ?? {}) },
     devices: { ...DEFAULT_SETTINGS.devices, ...(data?.devices ?? {}) },
     loyalty: cleanLoyalty(data?.loyalty),
+    yoco: { ...DEFAULT_SETTINGS.yoco, ...(data?.yoco ?? {}) },
   };
 }
 

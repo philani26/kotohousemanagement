@@ -5,8 +5,10 @@ import { RouterLink } from '@angular/router';
 import { getDoc, orderBy, query, where } from 'firebase/firestore';
 import { Ingredient, Order, PaymentMethod, Product, Recipe } from '@shared/models';
 import { discountPercent, inOrderQueue } from '@shared/domain';
-import { parseRandToCents } from '@shared/money';
+import { formatZar, parseRandToCents } from '@shared/money';
 import { Customer, normalisePhone, rewardReady } from '@shared/loyalty';
+import { YocoCheckout } from '@shared/yoco';
+import QRCode from 'qrcode';
 import { ApiError, ApiService } from '../../core/api.service';
 import { ConfirmService } from '../../core/confirm.service';
 import { OrdersService } from '../../core/orders.service';
@@ -14,7 +16,7 @@ import { PendingChargeService } from '../../core/pending-charge.service';
 import { OutboxService } from '../../core/outbox.service';
 import { AuthService } from '../../core/auth.service';
 import { BusinessService } from '../../core/business.service';
-import { liveQuery } from '../../core/live';
+import { liveDoc, liveQuery } from '../../core/live';
 import { ToastService } from '../../core/toast.service';
 import { newSaleId } from '../../shared/ids';
 import { ZarPipe } from '../../shared/pipes';
@@ -328,8 +330,37 @@ const METHODS: { id: PaymentMethod; label: string; ico: string; hint: string }[]
                 }
                 <p class="muted small">Only continue once the machine says <em>Approved</em>.</p>
               </div>
-              <label class="field"><span>Slip number (optional)</span><input [(ngModel)]="reference" name="ref" /></label>
-              <button class="btn charge-btn block" [disabled]="busy()" (click)="pay()">Payment approved</button>
+              @if (yocoCheckout(); as y) {
+                <div class="pay-instruction">
+                  @if (y.status === 'failed') {
+                    <p class="neg"><strong>The phone payment did not go through.</strong></p>
+                    <button class="btn block" (click)="cancelYoco()">Try again or use the card machine</button>
+                  } @else {
+                    <p>Customer scans this and pays <strong>{{ y.amountCents | zar }}</strong> on their phone:</p>
+                    @if (yocoQr(); as qr) {
+                      <img [src]="qr" alt="QR code to pay by card" width="220" height="220" style="image-rendering: pixelated" />
+                    }
+                    <p class="small muted">
+                      @if (y.status === 'paid') { ✓ Paid – saving the sale… } @else { Waiting for the payment… this screen updates by itself. }
+                    </p>
+                    @if (y.status === 'paid') {
+                      <button class="btn charge-btn block" [disabled]="busy()" (click)="pay()">Save sale</button>
+                    }
+                    <div class="row" [hidden]="y.status === 'paid'" style="gap: .5rem; justify-content: center">
+                      @if (customerPhone()) {
+                        <a class="btn small" [href]="yocoWhatsapp(y.redirectUrl)" target="_blank" rel="noopener">Send link on WhatsApp</a>
+                      }
+                      <button class="btn small ghost" (click)="cancelYoco()">Use the card machine instead</button>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <label class="field"><span>Slip number (optional)</span><input [(ngModel)]="reference" name="ref" /></label>
+                <button class="btn charge-btn block" [disabled]="busy()" (click)="pay()">Payment approved</button>
+                @if (biz.settings().yoco.enabled) {
+                  <button class="btn block" style="margin-top: .5rem" [disabled]="busy() || dueByMethod() < 200" (click)="startYoco()">📱 Customer pays on their phone (QR)</button>
+                }
+              }
             }
 
             @case ('eft') {
@@ -466,6 +497,17 @@ export class PosPage {
   /** split payment: the cash the customer handed over; the card/EFT step takes the rest */
   protected readonly splitCash = signal<number | null>(null);
   protected readonly dueByMethod = computed(() => this.total() - (this.splitCash() ?? 0));
+
+  // ---- Yoco: card payment on the customer's phone ----
+  private readonly yocoId = signal<string | null>(null);
+  private readonly yocoDoc = liveDoc<YocoCheckout>(() => (this.yocoId() ? this.biz.docRef('yocoCheckouts', this.yocoId()!) : null));
+  /** only the checkout for the amount on screen counts */
+  protected readonly yocoCheckout = computed(() => {
+    const c = this.yocoDoc.data();
+    return c && c.id === this.yocoId() ? c : null;
+  });
+  protected readonly yocoQr = signal<string | null>(null);
+  private yocoAutoPaid: string | null = null;
   protected readonly showDiscount = signal(false);
   protected readonly showNote = signal(false);
   protected readonly busy = signal(false);
@@ -518,6 +560,13 @@ export class PosPage {
   private readonly savedKey = computed(() => `kotahouse.saved.${this.auth.uid()}.${this.auth.businessId()}`);
 
   constructor() {
+    // The customer finished paying on their phone: complete the sale by itself.
+    effect(() => {
+      const c = this.yocoCheckout();
+      if (c?.status !== 'paid' || this.step() !== 'card' || untracked(() => this.busy()) || this.yocoAutoPaid === c.id) return;
+      this.yocoAutoPaid = c.id; // only once automatically; after an error the cashier taps Save sale
+      untracked(() => void this.pay());
+    });
     effect(() => {
       const key = this.savedKey();
       untracked(() => this.saved.set(readJson<SavedSale[]>(key) ?? []));
@@ -626,6 +675,7 @@ export class PosPage {
   }
 
   clear() {
+    this.cancelYoco();
     this.removeCustomer();
     this.cart.set([]);
     this.receivedText.set('');
@@ -652,7 +702,31 @@ export class PosPage {
     this.step.set('method');
   }
 
+  async startYoco() {
+    this.busy.set(true);
+    try {
+      const res = await this.api.call('createYocoCheckout', { saleId: this.saleId, amountCents: this.dueByMethod() });
+      this.yocoQr.set(await QRCode.toDataURL(res.redirectUrl, { width: 440, margin: 1 }));
+      this.yocoId.set(res.checkoutId);
+    } catch (err) {
+      this.toast.error(err);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  cancelYoco() {
+    this.yocoId.set(null);
+    this.yocoQr.set(null);
+  }
+
+  protected yocoWhatsapp(url: string) {
+    const text = `Pay ${formatZar(this.dueByMethod())} to ${this.biz.settings().businessName} by card: ${url}`;
+    return `https://wa.me/${this.customerPhone()}?text=${encodeURIComponent(text)}`;
+  }
+
   chooseMethod(m: PaymentMethod) {
+    this.cancelYoco();
     this.splitCash.set(null);
     this.method.set(m);
     this.step.set(m);
@@ -668,6 +742,7 @@ export class PosPage {
   }
 
   back() {
+    this.cancelYoco();
     if (this.splitCash() !== null) {
       this.splitCash.set(null);
       this.method.set('cash');
@@ -678,7 +753,9 @@ export class PosPage {
   }
 
   closeCharge() {
-    if (!this.busy()) this.step.set(null);
+    if (this.busy()) return;
+    this.cancelYoco();
+    this.step.set(null);
   }
 
   setReceived(cents: number) {
@@ -709,6 +786,7 @@ export class PosPage {
         amountReceivedCents: this.method() === 'cash' ? (this.receivedCents() ?? undefined) : (this.splitCash() ?? undefined),
         cashCents: this.splitCash() ?? undefined,
         reference: this.reference.trim() || undefined,
+        yocoCheckoutId: this.yocoCheckout()?.status === 'paid' ? this.yocoCheckout()!.id : undefined,
       },
       customer: this.customerPhone()
         ? { phone: this.customerPhone()!, name: this.customerName.trim() || undefined, redeemReward: this.rewardCents() > 0 || undefined }
