@@ -3,7 +3,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ChartConfiguration } from 'chart.js';
 import { limit, orderBy, query, where } from 'firebase/firestore';
-import { dayRange, emptyDailyStats, expectedCash, isLowStock, profitSummary, sumStats } from '@shared/domain';
+import { dayRange, emptyDailyStats, expectedCash, isLowStock, paymentLabel, paymentParts, profitSummary, sumStats } from '@shared/domain';
 import {
   AppNotification,
   AuditLog,
@@ -176,7 +176,7 @@ import { CHART_COLOURS, Period, daysBefore, liveStats, periodRange } from './sta
             <div class="list-item">
               <div class="main">
                 <div class="title">#{{ s.receiptNo }} · {{ s.totalCents | zar }}</div>
-                <div class="tiny">{{ s.createdAt | ts | date: 'HH:mm' }} · {{ s.employeeName }} · {{ s.payment.method }}</div>
+                <div class="tiny">{{ s.createdAt | ts | date: 'HH:mm' }} · {{ s.employeeName }} · {{ label(s.payment) }}</div>
               </div>
               @if (s.status !== 'completed') {
                 <span class="badge warn">{{ s.status }}</span>
@@ -237,13 +237,15 @@ export class DashboardPage {
     return id ? query(this.biz.col('expenses'), where('shiftId', '==', id)) : null;
   });
   /** Builds the same counters as dailyStats, but from this shift's own records. */
+  protected readonly label = paymentLabel;
+
   private readonly shiftTotals = computed<DailyStats>(() => {
     const t = emptyDailyStats(this.biz.openShift()?.dayKey ?? this.biz.today());
     for (const s of this.shiftSales.data()) {
       t.grossSalesCents += s.totalCents;
       t.discountsCents += s.discountCents;
       t.orders++;
-      t.byMethod[s.payment.method] += s.totalCents;
+      for (const p of paymentParts(s.payment, s.totalCents)) t.byMethod[p.method] += p.amountCents;
       t.cogsCents += s.costCents;
       if (s.status === 'refunded') {
         t.refundsCents += s.totalCents;

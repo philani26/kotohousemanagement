@@ -1,6 +1,7 @@
 import { onCall } from 'firebase-functions/v2/https';
 import { ApiRequest, ApiResponse } from './shared/api';
 import { Approval, CashSession, Expense, Ingredient, Sale } from './shared/models';
+import { cashPartCents } from './shared/domain';
 import { FieldValue, audit, col, db, fail, handle, optionalText, readSettings, requireCaller, todayKey } from './common';
 import { applyExpenseDecision, applyRefund, applyStockChange, bumpStats, inc } from './effects';
 
@@ -31,7 +32,7 @@ export const decideApproval = onCall<ApiRequest<'decideApproval'>, Promise<ApiRe
         const sale = (await tx.get(saleRef)).data() as Sale | undefined;
         if (!sale) fail('not-found', 'Sale not found');
         let session: CashSession | null = null;
-        if (approve && sale.payment.method === 'cash') {
+        if (approve && cashPartCents(sale.payment, sale.totalCents) > 0) {
           const open = await tx.get(col(b, 'cashSessions').where('status', '==', 'open').limit(1));
           if (open.empty) fail('failed-precondition', 'Approve cash refunds while a shift is open, so the cash paid back is counted in the till');
           session = open.docs[0].data() as CashSession;

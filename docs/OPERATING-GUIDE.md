@@ -12,6 +12,7 @@
    - **Cash:** type what the customer gave, or tap *Exact*, *R50*, *R100* or *R200*. The app shows the change.
    - **Card:** take the payment on the card machine first. You can type the slip number.
    - **EFT:** only hand over the food when the payment is confirmed.
+   - **Part cash, part card (or EFT):** choose **Cash**, type the cash the customer hands over, then tap **Rest by card** (or **Rest by EFT**) and take the rest on the machine. The cash goes in the till and counts towards the cash-up; the card part is checked against the card machine total.
 3. **Complete sale**. Then tap **Print receipt** or **WhatsApp receipt** if the customer wants one.
 4. **No internet (load-shedding, no data)?** Keep selling. Each sale is saved on the phone, and an orange **Offline** label shows how many are waiting. They send by themselves when the internet is back, and are never recorded twice. Don't clear the browser or sign out until they've sent. You can't close the shift until they're through.
 4. **Discounts** need a reason, and you can only give up to the limit the owner set.

@@ -7,6 +7,7 @@ import {
   Product,
   Recipe,
   SaleLine,
+  SalePayment,
   StockCountLine,
 } from './models';
 
@@ -79,19 +80,55 @@ export function discountPercent(discountCents: Cents, subtotalCents: Cents): num
   return subtotalCents === 0 ? 0 : (discountCents / subtotalCents) * 100;
 }
 
-/** Validates the tendered cash and returns change. Card/EFT must equal the total. */
-export function settlePayment(
-  method: PaymentMethod,
-  totalCents: Cents,
-  amountReceivedCents?: Cents,
-): { amountReceivedCents?: Cents; changeCents?: Cents } {
-  if (method !== 'cash') return {};
-  if (!Number.isSafeInteger(amountReceivedCents) || (amountReceivedCents as number) < totalCents) {
-    throw new DomainError('Cash received must be at least the order total');
+export interface SettledPayment {
+  method: PaymentMethod;
+  cashCents?: Cents;
+  amountReceivedCents?: Cents;
+  changeCents?: Cents;
+}
+
+/**
+ * Validates the payment and returns change. Card/EFT pay the whole total;
+ * cash must cover it. A split pays `cashCents` in cash and the rest by card or
+ * EFT. If prices dropped while offline and the cash part now covers
+ * everything, the sale becomes a plain cash sale.
+ */
+export function settlePayment(method: PaymentMethod, totalCents: Cents, amountReceivedCents?: Cents, cashCents?: Cents): SettledPayment {
+  const split = method !== 'cash' && cashCents !== undefined && cashCents !== null && cashCents !== 0;
+  if (method !== 'cash' && !split) return { method };
+  if (split && (!Number.isSafeInteger(cashCents) || (cashCents as number) < 0)) throw new DomainError('The cash part looks wrong');
+  const cashDue = split ? Math.min(cashCents as number, totalCents) : totalCents;
+  if (!Number.isSafeInteger(amountReceivedCents) || (amountReceivedCents as number) < cashDue) {
+    throw new DomainError(split ? 'Cash received must be at least the cash part' : 'Cash received must be at least the order total');
   }
   const received = amountReceivedCents as number;
-  if (received > totalCents + 200_000) throw new DomainError('Cash received looks wrong (more than R2,000 change)');
-  return { amountReceivedCents: received, changeCents: received - totalCents };
+  if (received > cashDue + 200_000) throw new DomainError('Cash received looks wrong (more than R2,000 change)');
+  const change = { amountReceivedCents: received, changeCents: received - cashDue };
+  return split && cashDue < totalCents ? { method, cashCents: cashDue, ...change } : { method: 'cash', ...change };
+}
+
+export interface PaymentPart {
+  method: PaymentMethod;
+  amountCents: Cents;
+}
+
+/** How a sale's total was paid, split by method. Plain sales have one part. */
+export function paymentParts(payment: Pick<SalePayment, 'method' | 'cashCents'>, totalCents: Cents): PaymentPart[] {
+  const cash = payment.method === 'cash' ? totalCents : Math.min(payment.cashCents ?? 0, totalCents);
+  if (payment.method === 'cash') return [{ method: 'cash', amountCents: totalCents }];
+  return cash > 0
+    ? [{ method: 'cash', amountCents: cash }, { method: payment.method, amountCents: totalCents - cash }]
+    : [{ method: payment.method, amountCents: totalCents }];
+}
+
+/** The cash part of a sale (all of it for cash sales, none for card/EFT). */
+export function cashPartCents(payment: Pick<SalePayment, 'method' | 'cashCents'>, totalCents: Cents): Cents {
+  return paymentParts(payment, totalCents).find((p) => p.method === 'cash')?.amountCents ?? 0;
+}
+
+/** "cash", "card", or "cash + card" */
+export function paymentLabel(payment: Pick<SalePayment, 'method' | 'cashCents'>): string {
+  return payment.method !== 'cash' && payment.cashCents ? `cash + ${payment.method}` : payment.method;
 }
 
 export interface IngredientUsage {

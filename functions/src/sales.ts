@@ -1,6 +1,6 @@
 import { onCall } from 'firebase-functions/v2/https';
 import { ApiRequest, ApiResponse } from './shared/api';
-import { DomainError, clampStockChange, discountPercent, ingredientUsage, isLowStock, localHour, priceCart, requireText, resolveSoldAt, settlePayment } from './shared/domain';
+import { DomainError, clampStockChange, discountPercent, ingredientUsage, isLowStock, localHour, priceCart, requireText, resolveSoldAt, settlePayment, paymentParts, paymentLabel, cashPartCents } from './shared/domain';
 import { formatZar } from './shared/money';
 import { CashSession, Ingredient, PAYMENT_METHODS, Product, Recipe, Sale } from './shared/models';
 import {
@@ -81,7 +81,9 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
           fail('permission-denied', `Discounts above ${settings.maxEmployeeDiscountPercent}% need the owner`);
         }
       }
-      const payment = settlePayment(d.payment.method, priced.totalCents, d.payment.amountReceivedCents);
+      const payment = settlePayment(d.payment.method, priced.totalCents, d.payment.amountReceivedCents, d.payment.cashCents);
+      const parts = paymentParts(payment, priced.totalCents);
+      const paidBy = paymentLabel(payment);
       const { usage, costCents } = ingredientUsage(priced.lines, recipes, ingredients);
 
       // ---- writes ----
@@ -101,7 +103,7 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
         ...(discountReason ? { discountReason } : {}),
         totalCents: priced.totalCents,
         costCents,
-        payment: { method: d.payment.method, ...payment, ...(reference ? { reference } : {}), verified: d.payment.method === 'cash' },
+        payment: { ...payment, ...(reference ? { reference } : {}), verified: payment.method === 'cash' },
         status: 'completed',
         dayKey,
         ...(soldAt.offline ? { offline: true } : {}),
@@ -144,8 +146,9 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
         }
       }
 
-      const methodField = `${d.payment.method}SalesCents` as const;
-      tx.update(col(b, 'cashSessions').doc(shift.cashSessionId), { [methodField]: inc(priced.totalCents) });
+      const sessionIncrements: Record<string, unknown> = {};
+      for (const p of parts) sessionIncrements[`${p.method}SalesCents`] = inc(p.amountCents);
+      tx.update(col(b, 'cashSessions').doc(shift.cashSessionId), sessionIncrements);
       tx.update(col(b, 'shifts').doc(shift.id), { lastSaleAt: Timestamp.fromDate(now) });
 
       const productIncrements: Record<string, unknown> = {};
@@ -157,7 +160,7 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
         discountsCents: inc(priced.discountCents),
         orders: inc(1),
         cogsCents: inc(costCents),
-        byMethod: { [d.payment.method]: inc(priced.totalCents) },
+        byMethod: Object.fromEntries(parts.map((p) => [p.method, inc(p.amountCents)])),
         products: productIncrements,
         hourly: { [String(localHour(now, settings.timezone)).padStart(2, '0')]: inc(priced.totalCents) },
       });
@@ -175,7 +178,7 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
               { label: 'Items', value: itemsText(priced.lines) },
               { label: 'Full price', value: formatZar(priced.subtotalCents) },
               { label: 'Discount', value: `${formatZar(priced.discountCents)} (${Math.round(pct)}%)`, tone: 'bad' },
-              { label: 'Customer paid', value: `${formatZar(priced.totalCents)} by ${d.payment.method}` },
+              { label: 'Customer paid', value: `${formatZar(priced.totalCents)} by ${paidBy}` },
               { label: 'Reason given', value: discountReason ?? '' },
             ],
             actorName: caller.name,
@@ -206,7 +209,7 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
       audit(tx, b, caller, 'sale.recorded', 'sales', d.saleId, {
         receiptNo,
         totalCents: priced.totalCents,
-        method: d.payment.method,
+        method: paidBy,
         ...(soldAt.offline ? { offline: true, soldAt: now.toISOString() } : {}),
         ...(priceChanged ? { chargedCents: d.expectedTotalCents } : {}),
       });
@@ -238,7 +241,8 @@ export const requestRefund = onCall<ApiRequest<'requestRefund'>, Promise<ApiResp
       const shift = await findOpenShift(tx, caller);
       let session: CashSession | null = null;
       if (shift) session = (await tx.get(col(b, 'cashSessions').doc(shift.cashSessionId))).data() as CashSession;
-      if (sale.payment.method === 'cash' && !session) fail('failed-precondition', 'A shift must be open to pay back a cash refund');
+      const cashBack = cashPartCents(sale.payment, sale.totalCents);
+      if (cashBack > 0 && !session) fail('failed-precondition', 'A shift must be open to pay back a cash refund');
 
       const approvalRef = col(b, 'approvals').doc();
       const isOwner = caller.role === 'owner';
@@ -247,9 +251,9 @@ export const requestRefund = onCall<ApiRequest<'requestRefund'>, Promise<ApiResp
         type: 'refund',
         status: isOwner ? 'approved' : 'pending',
         refId: sale.id,
-        summary: `Refund receipt #${sale.receiptNo} (${sale.payment.method}) – ${reason}`,
+        summary: `Refund receipt #${sale.receiptNo} (${paymentLabel(sale.payment)}) – ${reason}`,
         amountCents: sale.totalCents,
-        payload: { reason, method: sale.payment.method },
+        payload: { reason, method: paymentLabel(sale.payment) },
         requestedBy: caller.uid,
         requestedByName: caller.name,
         requestedAt: FieldValue.serverTimestamp(),
@@ -270,13 +274,15 @@ export const requestRefund = onCall<ApiRequest<'requestRefund'>, Promise<ApiResp
             { label: 'Originally sold', value: `${localTime((sale.soldAt ?? sale.createdAt).toDate(), settings)} by ${sale.employeeName}` },
             { label: 'Items', value: itemsText(sale.lines) },
             { label: 'Refund amount', value: formatZar(sale.totalCents), tone: 'bad' },
-            { label: 'Paid by', value: sale.payment.method.toUpperCase() },
+            { label: 'Paid by', value: paymentLabel(sale.payment).toUpperCase() },
             { label: 'Reason given', value: reason },
             { label: 'Requested', value: localTime(new Date(), settings) },
           ],
           actorName: caller.name,
           action: sale.payment.method === 'cash'
             ? 'Approve or reject in Approvals. If approved, the cash comes out of the till that is open now.'
+            : cashBack > 0
+            ? `Approve or reject in Approvals. If approved, ${formatZar(cashBack)} comes out of the till; the ${sale.payment.method} part must be refunded on the card machine or by bank transfer.`
             : 'Approve or reject in Approvals. Card/EFT refunds must also be done on the card machine or by bank transfer.',
           link: '/approvals',
         });

@@ -17,6 +17,9 @@ import {
   profitSummary,
   reconcileCash,
   settlePayment,
+  paymentParts,
+  cashPartCents,
+  paymentLabel,
   stockCountLine,
   sumStats,
 } from './domain';
@@ -104,14 +107,40 @@ describe('priceCart (sales)', () => {
 
 describe('settlePayment', () => {
   it('calculates change for cash', () => {
-    expect(settlePayment('cash', 3500, 5000)).toEqual({ amountReceivedCents: 5000, changeCents: 1500 });
+    expect(settlePayment('cash', 3500, 5000)).toEqual({ method: 'cash', amountReceivedCents: 5000, changeCents: 1500 });
   });
   it('rejects short cash', () => {
     expect(() => settlePayment('cash', 3500, 3000)).toThrow(DomainError);
     expect(() => settlePayment('cash', 3500)).toThrow(DomainError);
   });
   it('ignores tendered amount for card and EFT', () => {
-    expect(settlePayment('card', 3500, 9999)).toEqual({});
+    expect(settlePayment('card', 3500, 9999)).toEqual({ method: 'card' });
+  });
+  it('splits cash and card, with change on the cash part', () => {
+    expect(settlePayment('card', 8000, 5000, 5000)).toEqual({ method: 'card', cashCents: 5000, amountReceivedCents: 5000, changeCents: 0 });
+    expect(settlePayment('eft', 8000, 10000, 3000)).toEqual({ method: 'eft', cashCents: 3000, amountReceivedCents: 10000, changeCents: 7000 });
+  });
+  it('rejects short cash on a split', () => {
+    expect(() => settlePayment('card', 8000, 2000, 3000)).toThrow(/cash part/);
+    expect(() => settlePayment('card', 8000, undefined, 3000)).toThrow(DomainError);
+    expect(() => settlePayment('card', 8000, 5000, -1)).toThrow(DomainError);
+  });
+  it('turns a split into a cash sale when the cash part covers everything', () => {
+    expect(settlePayment('card', 4000, 5000, 5000)).toEqual({ method: 'cash', amountReceivedCents: 5000, changeCents: 1000 });
+  });
+});
+
+describe('paymentParts', () => {
+  it('splits a sale by method', () => {
+    expect(paymentParts({ method: 'cash' }, 3500)).toEqual([{ method: 'cash', amountCents: 3500 }]);
+    expect(paymentParts({ method: 'card' }, 3500)).toEqual([{ method: 'card', amountCents: 3500 }]);
+    expect(paymentParts({ method: 'card', cashCents: 1000 }, 3500)).toEqual([
+      { method: 'cash', amountCents: 1000 },
+      { method: 'card', amountCents: 2500 },
+    ]);
+    expect(cashPartCents({ method: 'eft', cashCents: 1000 }, 3500)).toBe(1000);
+    expect(cashPartCents({ method: 'eft' }, 3500)).toBe(0);
+    expect(paymentLabel({ method: 'card', cashCents: 1000 })).toBe('cash + card');
   });
 });
 

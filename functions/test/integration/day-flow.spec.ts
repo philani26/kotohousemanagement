@@ -365,6 +365,39 @@ describe('a trading day', () => {
     ).rejects.toThrow(/Only 0 each of Russian in stock/);
   });
 
+  it('splits a payment between cash and card, and refunds only the cash part from the till', async () => {
+    const inB2 = { businessId: b2 } as Record<string, unknown>;
+    const prod = doc(collection(owner.db, 'businesses', b2, 'products'));
+    await setDoc(prod, { id: prod.id, name: 'Family Kota', category: 'kota', priceCents: 8000, active: true, sortOrder: 2, ...stamp(ownerUid) });
+    const sessionB2 = async () => {
+      const open = await getDocs(query(collection(owner.db, 'businesses', b2, 'cashSessions'), where('status', '==', 'open')));
+      return open.docs[0].data() as CashSession;
+    };
+    const before = await sessionB2();
+    const saleId = `split${run}abcdefghij`;
+    const items = [{ productId: prod.id, quantity: 1 }];
+
+    // R80: customer hands over R50 cash, the rest (R30) on the card machine
+    await expect(
+      owner.call('recordSale', { saleId, items, payment: { method: 'card', cashCents: 5000, amountReceivedCents: 4000 }, ...inB2 } as never),
+    ).rejects.toThrow(/cash part/);
+    const res = await owner.call('recordSale', { saleId, items, payment: { method: 'card', cashCents: 5000, amountReceivedCents: 5000 }, ...inB2 } as never);
+    expect(res.totalCents).toBe(8000);
+    expect(res.changeCents).toBe(0);
+    const sale = (await getDoc(doc(owner.db, 'businesses', b2, 'sales', saleId))).data() as Sale;
+    expect(sale.payment).toMatchObject({ method: 'card', cashCents: 5000, verified: false });
+
+    let s = await sessionB2();
+    expect(s.cashSalesCents - before.cashSalesCents).toBe(5000);
+    expect(s.cardSalesCents - before.cardSalesCents).toBe(3000);
+    const day = (await getDoc(doc(owner.db, 'businesses', b2, 'dailyStats', sale.dayKey))).data() as DailyStats;
+    expect(day.byMethod.cash).toBeGreaterThanOrEqual(5000);
+
+    await owner.call('requestRefund', { saleId, reason: 'Customer changed mind', ...inB2 } as never);
+    s = await sessionB2();
+    expect(s.cashRefundsCents - before.cashRefundsCents).toBe(5000);
+  });
+
   it('takes orders on WhatsApp and tells the customer when it is ready', async () => {
     const inB2 = { businessId: b2 } as Record<string, unknown>;
     await owner.call('linkWhatsapp', { ordering: true, phoneNumberId: '1098765432', displayNumber: '+27 82 000 0000', ...inB2 } as never);

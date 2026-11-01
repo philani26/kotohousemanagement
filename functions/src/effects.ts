@@ -1,5 +1,5 @@
 import { Transaction } from 'firebase-admin/firestore';
-import { clampStockChange, reorderQty } from './shared/domain';
+import { cashPartCents, clampStockChange, reorderQty } from './shared/domain';
 import { formatZar } from './shared/money';
 import { BusinessSettings, CashSession, EXPENSE_INVENTORY_CATEGORY, Expense, Ingredient, Sale, StockMovementType } from './shared/models';
 import { Caller, FieldValue, col, localTime, notify, todayKey } from './common';
@@ -131,8 +131,9 @@ export function applyRefund(
       ? { status: 'refunded', refund: { ...newRefund, ...decided } }
       : { status: 'refunded', 'refund.decidedBy': decided.decidedBy, 'refund.decidedAt': decided.decidedAt },
   );
-  if (sale.payment.method === 'cash' && openSession) {
-    tx.update(col(businessId, 'cashSessions').doc(openSession.id), { cashRefundsCents: inc(sale.totalCents) });
+  const cashBack = cashPartCents(sale.payment, sale.totalCents);
+  if (cashBack > 0 && openSession) {
+    tx.update(col(businessId, 'cashSessions').doc(openSession.id), { cashRefundsCents: inc(cashBack) });
   }
   // Refunds are reported against the day of the original sale.
   bumpStats(tx, businessId, sale.dayKey, {

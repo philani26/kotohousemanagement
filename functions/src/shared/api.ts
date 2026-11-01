@@ -42,7 +42,8 @@ export interface Api {
       items: CartItem[];
       discountCents?: Cents;
       discountReason?: string;
-      payment: { method: PaymentMethod; amountReceivedCents?: Cents; reference?: string };
+      /** split payments: cashCents in cash, the rest by method (card/EFT) */
+      payment: { method: PaymentMethod; amountReceivedCents?: Cents; cashCents?: Cents; reference?: string };
       /** set by the offline queue: when the sale was rung up on the device */
       soldAtMillis?: number;
       /** total the cashier charged; flags price changes between an offline sale and its sync */

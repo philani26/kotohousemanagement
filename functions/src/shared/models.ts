@@ -242,9 +242,12 @@ export interface SaleLine {
 export type SaleStatus = 'completed' | 'refundPending' | 'refunded';
 
 export interface SalePayment {
+  /** for a split payment: the card/EFT part (the rest was cash, see cashCents) */
   method: PaymentMethod;
-  amountReceivedCents?: Cents; // cash only
-  changeCents?: Cents; // cash only
+  /** split payments only: the part of the total paid in cash; method pays the rest */
+  cashCents?: Cents;
+  amountReceivedCents?: Cents; // cash tendered (cash and split payments)
+  changeCents?: Cents; // cash and split payments
   reference?: string; // card slip / EFT reference
   verified?: boolean; // card/EFT matched against bank or terminal records
   verifiedBy?: string;

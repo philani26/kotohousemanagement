@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { limit, orderBy, query, where } from 'firebase/firestore';
 import { ORDER_STATUSES, Order, OrderStatus, Sale } from '@shared/models';
 import { centsToRandString } from '@shared/money';
+import { cashPartCents, paymentLabel, paymentParts } from '@shared/domain';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { BusinessService } from '../../core/business.service';
@@ -52,7 +53,7 @@ import { TsPipe, ZarPipe } from '../../shared/pipes';
             <div class="main">
               <div class="row">
                 <span class="title">#{{ s.receiptNo }} · {{ s.totalCents | zar }}</span>
-                <span class="badge" [class.info]="s.payment.method !== 'cash'">{{ s.payment.method | uppercase }}</span>
+                <span class="badge" [class.info]="s.payment.method !== 'cash'">{{ label(s) | uppercase }}</span>
                 @if (s.status === 'refunded') {
                   <span class="badge bad">Refunded</span>
                 } @else if (s.status === 'refundPending') {
@@ -91,7 +92,10 @@ import { TsPipe, ZarPipe } from '../../shared/pipes';
                   <div class="tiny">📝 {{ o.note }}</div>
                 }
               }
-              @if (s.payment.method === 'cash' && s.payment.amountReceivedCents) {
+              @if (s.payment.cashCents) {
+                <div class="tiny">Cash {{ s.payment.cashCents | zar }} + {{ s.payment.method | uppercase }} {{ s.totalCents - s.payment.cashCents | zar }}</div>
+              }
+              @if ((s.payment.method === 'cash' || s.payment.cashCents) && s.payment.amountReceivedCents) {
                 <div class="tiny">Received {{ s.payment.amountReceivedCents | zar }}, change {{ s.payment.changeCents ?? 0 | zar }}</div>
               }
               @if (s.payment.reference) {
@@ -123,11 +127,14 @@ import { TsPipe, ZarPipe } from '../../shared/pipes';
       <div class="dialog-backdrop" (click)="refundFor.set(null)">
         <form class="dialog" (click)="$event.stopPropagation()" (ngSubmit)="refund(s)">
           <h2>Refund receipt #{{ s.receiptNo }}</h2>
-          <p>{{ s.totalCents | zar }} paid by {{ s.payment.method }}.</p>
+          <p>{{ s.totalCents | zar }} paid by {{ label(s) }}.</p>
           @if (!auth.isOwner()) {
             <p class="muted small">The owner must approve this refund. Do not hand back money until it is approved.</p>
           } @else if (s.payment.method === 'card') {
-            <p class="muted small">Remember to process the refund on the card machine too.</p>
+            <p class="muted small">Remember to process the refund on the card machine too{{ s.payment.cashCents ? ' (only the card part – ' + ((s.totalCents - s.payment.cashCents) | zar) + ')' : '' }}.</p>
+          }
+          @if (cashBack(s); as c) {
+            <p class="muted small">{{ c | zar }} cash comes out of the till.</p>
           }
           <label class="field"><span>Reason</span><textarea name="reason" [(ngModel)]="reason" required></textarea></label>
           <div class="row">
@@ -193,10 +200,18 @@ export class SalesPage {
       if (s.status === 'refunded') continue;
       t.net += s.totalCents;
       t.count++;
-      t[s.payment.method] += s.totalCents;
+      for (const p of paymentParts(s.payment, s.totalCents)) t[p.method] += p.amountCents;
     }
     return t;
   });
+
+  protected label(s: Sale) {
+    return paymentLabel(s.payment);
+  }
+
+  protected cashBack(s: Sale) {
+    return s.payment.method === 'cash' ? 0 : cashPartCents(s.payment, s.totalCents);
+  }
 
   async refund(s: Sale) {
     this.busy.set(true);
@@ -214,7 +229,7 @@ export class SalesPage {
 
   downloadCsv() {
     const r = centsToRandString;
-    const header = ['Receipt', 'Time', 'Cashier', 'Items', 'Subtotal', 'Discount', 'Total', 'Method', 'Reference', 'Status', 'Verified', 'Offline', 'Ingredient cost'];
+    const header = ['Receipt', 'Time', 'Cashier', 'Items', 'Subtotal', 'Discount', 'Total', 'Method', 'Cash part', 'Reference', 'Status', 'Verified', 'Offline', 'Ingredient cost'];
     const rows = this.sales.data().map((s) => [
       s.receiptNo,
       (s.soldAt ?? s.createdAt)?.toDate().toLocaleString('en-ZA') ?? '',
@@ -223,7 +238,8 @@ export class SalesPage {
       r(s.subtotalCents),
       r(s.discountCents),
       r(s.totalCents),
-      s.payment.method,
+      paymentLabel(s.payment),
+      r(cashPartCents(s.payment, s.totalCents)),
       s.payment.reference ?? '',
       s.status,
       s.payment.verified ? 'yes' : 'no',

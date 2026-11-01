@@ -229,7 +229,7 @@ const METHODS: { id: PaymentMethod; label: string; ico: string; hint: string }[]
         <div class="charge-panel">
           @if (s !== 'processing' && s !== 'done') {
             <div class="charge-top">
-              <button class="icon-btn" (click)="s === 'method' ? closeCharge() : step.set('method')" [attr.aria-label]="s === 'method' ? 'Close' : 'Back'">
+              <button class="icon-btn" (click)="s === 'method' ? closeCharge() : back()" [attr.aria-label]="s === 'method' ? 'Close' : 'Back'">
                 {{ s === 'method' ? '✕' : '←' }}
               </button>
               <span class="muted small">{{ cartCount() }} item(s)</span>
@@ -264,6 +264,12 @@ const METHODS: { id: PaymentMethod; label: string; ico: string; hint: string }[]
                   <div class="change-line short">{{ total() - (receivedCents() ?? 0) | zar }} still to pay</div>
                 }
               </div>
+              @if (receivedCents() && changeCents() === null) {
+                <div class="row" style="gap: .5rem; margin-bottom: .5rem">
+                  <button class="btn" style="flex: 1" (click)="splitRest('card')">💳 Rest by card</button>
+                  <button class="btn" style="flex: 1" (click)="splitRest('eft')">🏦 Rest by EFT</button>
+                </div>
+              }
               <div class="quick-amounts">
                 <button (click)="setReceived(total())">Exact</button>
                 @for (n of quickNotes(); track n) {
@@ -283,7 +289,10 @@ const METHODS: { id: PaymentMethod; label: string; ico: string; hint: string }[]
             @case ('card') {
               <div class="pay-instruction">
                 <div class="big-ico">💳</div>
-                <p>Take <strong>{{ total() | zar }}</strong> on the card machine.</p>
+                <p>Take <strong>{{ dueByMethod() | zar }}</strong> on the card machine.</p>
+                @if (splitCash(); as c) {
+                  <p class="small">{{ c | zar }} was paid in cash – put it in the till.</p>
+                }
                 <p class="muted small">Only continue once the machine says <em>Approved</em>.</p>
               </div>
               <label class="field"><span>Slip number (optional)</span><input [(ngModel)]="reference" name="ref" /></label>
@@ -293,7 +302,10 @@ const METHODS: { id: PaymentMethod; label: string; ico: string; hint: string }[]
             @case ('eft') {
               <div class="pay-instruction">
                 <div class="big-ico">🏦</div>
-                <p>Ask the customer to pay <strong>{{ total() | zar }}</strong> by EFT.</p>
+                <p>Ask the customer to pay <strong>{{ dueByMethod() | zar }}</strong> by EFT.</p>
+                @if (splitCash(); as c) {
+                  <p class="small">{{ c | zar }} was paid in cash – put it in the till.</p>
+                }
                 <p class="muted small">Hand over the food only once the money shows in the account or a proof of payment is confirmed.</p>
               </div>
               <label class="field"><span>Reference (optional)</span><input [(ngModel)]="reference" name="ref" /></label>
@@ -314,9 +326,9 @@ const METHODS: { id: PaymentMethod; label: string; ico: string; hint: string }[]
                   <h2>{{ l.receiptNo ? 'Sale complete' : 'Saved on this phone' }}</h2>
                   <p class="muted small">
                     {{ l.receiptNo ? 'Receipt #' + l.receiptNo : 'No internet – it will be sent automatically' }} ·
-                    {{ l.totalCents | zar }} by {{ l.method.toUpperCase() }} · {{ l.at | date: 'HH:mm' }}
+                    {{ l.totalCents | zar }} by {{ l.cashCents ? 'CASH + ' : '' }}{{ l.method.toUpperCase() }} · {{ l.at | date: 'HH:mm' }}
                   </p>
-                  @if (l.method === 'cash') {
+                  @if (l.method === 'cash' || l.cashCents) {
                     <div class="done-change">
                       <div class="tiny">Change due</div>
                       <div class="amount">{{ (l.changeCents ?? 0) | zar }}</div>
@@ -418,6 +430,9 @@ export class PosPage {
   protected readonly cartCount = computed(() => this.cart().reduce((s, l) => s + l.quantity, 0));
   protected readonly method = signal<PaymentMethod>('cash');
   protected readonly receivedText = signal('');
+  /** split payment: the cash the customer handed over; the card/EFT step takes the rest */
+  protected readonly splitCash = signal<number | null>(null);
+  protected readonly dueByMethod = computed(() => this.total() - (this.splitCash() ?? 0));
   protected readonly showDiscount = signal(false);
   protected readonly showNote = signal(false);
   protected readonly busy = signal(false);
@@ -538,6 +553,7 @@ export class PosPage {
   clear() {
     this.cart.set([]);
     this.receivedText.set('');
+    this.splitCash.set(null);
     this.removeDiscount();
     this.reference = '';
     this.orderNote = '';
@@ -554,13 +570,34 @@ export class PosPage {
       return this.toast.error(`Discounts above ${this.maxDiscount()}% need the owner`);
     }
     this.receivedText.set('');
+    this.splitCash.set(null);
     this.reference = '';
     this.step.set('method');
   }
 
   chooseMethod(m: PaymentMethod) {
+    this.splitCash.set(null);
     this.method.set(m);
     this.step.set(m);
+  }
+
+  /** Customer pays part in cash (what they handed over) and the rest by card or EFT. */
+  splitRest(m: 'card' | 'eft') {
+    const cash = this.receivedCents();
+    if (!cash || cash >= this.total()) return;
+    this.splitCash.set(cash);
+    this.method.set(m);
+    this.step.set(m);
+  }
+
+  back() {
+    if (this.splitCash() !== null) {
+      this.splitCash.set(null);
+      this.method.set('cash');
+      this.step.set('cash');
+    } else {
+      this.step.set('method');
+    }
   }
 
   closeCharge() {
@@ -592,7 +629,8 @@ export class PosPage {
       discountReason: discount ? this.discountReason.trim() : undefined,
       payment: {
         method: this.method(),
-        amountReceivedCents: this.method() === 'cash' ? (this.receivedCents() ?? undefined) : undefined,
+        amountReceivedCents: this.method() === 'cash' ? (this.receivedCents() ?? undefined) : (this.splitCash() ?? undefined),
+        cashCents: this.splitCash() ?? undefined,
         reference: this.reference.trim() || undefined,
       },
       soldAtMillis: Date.now(),
@@ -607,8 +645,9 @@ export class PosPage {
       discountCents: discount,
       totalCents: this.total(),
       method: this.method(),
+      cashCents: request.payment.cashCents,
       receivedCents: request.payment.amountReceivedCents,
-      changeCents: this.changeCents() ?? undefined,
+      changeCents: this.splitCash() !== null ? 0 : (this.changeCents() ?? undefined),
     };
     // Extras and other non-kitchen items stay off the order queue.
     const ticketLines = this.cart()

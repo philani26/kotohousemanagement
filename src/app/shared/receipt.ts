@@ -11,6 +11,8 @@ export interface Receipt {
   discountCents: number;
   totalCents: number;
   method: PaymentMethod;
+  /** split payments: the cash part; method paid the rest */
+  cashCents?: number;
   receivedCents?: number;
   changeCents?: number;
 }
@@ -27,8 +29,10 @@ export function receiptText(r: Receipt, shopName: string): string {
     '',
     ...(r.discountCents ? [`Subtotal  ${formatZar(r.subtotalCents)}`, `Discount  −${formatZar(r.discountCents)}`] : []),
     `*Total  ${formatZar(r.totalCents)}*`,
-    `Paid by ${r.method.toUpperCase()}`,
-    ...(r.method === 'cash' && r.receivedCents !== undefined
+    ...(r.cashCents
+      ? [`Paid by CASH ${formatZar(r.cashCents)} + ${r.method.toUpperCase()} ${formatZar(r.totalCents - r.cashCents)}`]
+      : [`Paid by ${r.method.toUpperCase()}`]),
+    ...((r.method === 'cash' || r.cashCents) && r.receivedCents !== undefined
       ? [`Cash  ${formatZar(r.receivedCents)}`, `Change  ${formatZar(r.changeCents ?? 0)}`]
       : []),
     '',
