@@ -12,6 +12,8 @@
 6. **Project settings → Your apps → Web app** → register and copy the config.
 
 > The functions region is set in `functions/src/common.ts` (`REGION`) and `src/environments/environment*.ts` (`functionsRegion`). They must match your Firestore location. If africa-south1 isn't offered for Functions in your project, use the nearest available region (e.g. `europe-west1`) in both places.
+>
+> The scheduled alert job `monitorActivity` always runs in `europe-west1` (`SCHEDULER_REGION` in `functions/src/scheduled.ts`), because Cloud Scheduler is not offered in africa-south1. It only reads and writes the Firestore database above.
 
 ## 2. Configure the app
 

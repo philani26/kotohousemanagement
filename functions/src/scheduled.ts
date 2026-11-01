@@ -5,6 +5,8 @@ import { CashSession, Shift } from './shared/models';
 import { formatZar } from './shared/money';
 import { NewNotification, Timestamp, col, db, localTime, notify, readSettings, todayKey } from './common';
 
+const SCHEDULER_REGION = process.env.SCHEDULER_REGION || 'europe-west1';
+
 function minutesSince(t: Timestamp | undefined, now: number): number {
   return t ? Math.floor((now - t.toMillis()) / 60_000) : Infinity;
 }
@@ -23,7 +25,9 @@ async function raiseOnce(businessId: string, id: string, n: NewNotification, set
  * and long periods without sales during trading hours. Thresholds come from
  * business settings so the owner can tune out unnecessary alerts.
  */
-export const monitorActivity = onSchedule({ schedule: 'every 15 minutes', timeZone: 'Africa/Johannesburg' }, async () => {
+// Cloud Scheduler is not offered in africa-south1, so only this job runs in Europe.
+// It reads and writes the same Firestore database; no shop data is stored there.
+export const monitorActivity = onSchedule({ schedule: 'every 15 minutes', timeZone: 'Africa/Johannesburg', region: SCHEDULER_REGION }, async () => {
   const businesses = await db.collection('businesses').select().get();
   const now = Date.now();
 
