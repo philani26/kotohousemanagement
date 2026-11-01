@@ -22,6 +22,30 @@ service cloud.firestore {
     function inBusiness(b) { return signedIn() && roleIn(b) in ['owner', 'employee']; }
     function isOwner(b) { return signedIn() && roleIn(b) == 'owner'; }
     function isStaff(b) { return inBusiness(b); }
+    // Kitchen staff only see and move order tickets – no money, stock or sales.
+    function isKitchen(b) { return signedIn() && roleIn(b) == 'kitchen'; }
+    function canSeeShop(b) { return isStaff(b) || isKitchen(b); }
+    // Work-site check: when the owner turned the geofence on, staff must have checked in
+    // at the shop (the checkIn function sets employees/{uid}.siteCheckUntil). Owners are exempt.
+    function siteOk(b) {
+      let settingsDoc = /databases/$(database)/documents/businesses/$(b)/businessSettings/main;
+      let me = /databases/$(database)/documents/businesses/$(b)/employees/$(request.auth.uid);
+      return isOwner(b)
+        || !exists(settingsDoc)
+        || !get(settingsDoc).data.get('geofence', {}).get('enabled', false)
+        || (exists(me) && get(me).data.get('siteCheckUntil', timestamp.value(0)) > request.time);
+    }
+    // Approved shop devices: when the owner locked work to approved devices, staff must be
+    // using one (the deviceHeartbeat function sets employees/{uid}.deviceOkUntil). Owners are exempt.
+    function deviceOk(b) {
+      let settingsDoc = /databases/$(database)/documents/businesses/$(b)/businessSettings/main;
+      let me = /databases/$(database)/documents/businesses/$(b)/employees/$(request.auth.uid);
+      return isOwner(b)
+        || !exists(settingsDoc)
+        || !get(settingsDoc).data.get('devices', {}).get('lockToApproved', false)
+        || (exists(me) && get(me).data.get('deviceOkUntil', timestamp.value(0)) != null
+            && get(me).data.get('deviceOkUntil', timestamp.value(0)) > request.time);
+    }
     function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
 
     function stamped() {
@@ -38,17 +62,22 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // WhatsApp number → shop mapping, written by linkWhatsapp only
+    match /whatsappNumbers/{id} {
+      allow read, write: if false;
+    }
+
     // Email queue for the Trigger Email extension – backend only
     match /mail/{id} {
       allow read, write: if false;
     }
 
     match /businesses/{b} {
-      allow read: if isStaff(b);
+      allow read: if canSeeShop(b);
       allow write: if false;
 
       match /businessSettings/{id} {
-        allow read: if isStaff(b);
+        allow read: if canSeeShop(b);
         allow create: if false;
         allow update: if isOwner(b) && stamped()
           && request.resource.data.currency == 'ZAR'
@@ -106,7 +135,7 @@ service cloud.firestore {
       }
 
       match /employees/{uid} {
-        allow read: if isOwner(b) || (isStaff(b) && isSelf(uid));
+        allow read: if isOwner(b) || (canSeeShop(b) && isSelf(uid));
         allow write: if false;
       }
 
@@ -153,8 +182,8 @@ service cloud.firestore {
       // move the status along; items and notes cannot be edited afterwards.
       match /orders/{id} {
         function validStatus(s) { return s in ['new', 'preparing', 'ready', 'collected']; }
-        allow read: if isStaff(b);
-        allow create: if isStaff(b)
+        allow read: if canSeeShop(b);
+        allow create: if isStaff(b) && siteOk(b) && deviceOk(b)
           && request.resource.data.keys().hasOnly(['id', 'receiptNo', 'lines', 'note', 'status', 'createdAtMillis', 'createdBy', 'createdByName', 'dayKey', 'updatedBy', 'updatedAt'])
           && request.resource.data.id == id
           && request.resource.data.createdBy == request.auth.uid
@@ -165,12 +194,51 @@ service cloud.firestore {
           && request.resource.data.lines.size() <= 30
           && request.resource.data.createdAtMillis is int
           && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 200));
-        allow update: if isStaff(b)
+        allow update: if isStaff(b) && siteOk(b) && deviceOk(b)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status', 'receiptNo', 'preparingAt', 'readyAt', 'collectedAt', 'updatedBy', 'updatedAt'])
+               .hasOnly(['status', 'receiptNo', 'preparingAt', 'readyAt', 'collectedAt', 'paid', 'saleId', 'updatedBy', 'updatedAt'])
           && validStatus(request.resource.data.status)
           && request.resource.data.updatedBy == request.auth.uid;
+        // The kitchen moves tickets along and hands food over. An unpaid WhatsApp order
+        // can't be handed over by the kitchen: it must be charged at the till first.
+        allow update: if isKitchen(b) && siteOk(b) && deviceOk(b)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'preparingAt', 'readyAt', 'collectedAt', 'updatedBy', 'updatedAt'])
+          && validStatus(request.resource.data.status)
+          && (request.resource.data.status != 'collected'
+              || resource.data.get('source', 'till') != 'whatsapp'
+              || resource.data.get('paid', false) == true)
+          && request.resource.data.updatedBy == request.auth.uid;
         allow delete: if false;
+      }
+
+      // WhatsApp conversations: written only by the webhook function; the owner can read them.
+      match /whatsappMessages/{id} {
+        allow read: if isOwner(b);
+        allow write: if false;
+      }
+      match /whatsappChats/{id} {
+        allow read: if isOwner(b);
+        allow write: if false;
+      }
+      match /whatsappInbound/{id} {
+        allow read, write: if false;
+      }
+      // Shop devices and away-from-app time: written by functions, read by the owner.
+      match /devices/{id} {
+        allow read: if isOwner(b);
+        allow write: if false;
+      }
+      match /activity/{id} {
+        allow read: if isOwner(b);
+        allow write: if false;
+      }
+      match /deviceInvites/{code} {
+        allow read: if isOwner(b);
+        allow write: if false;
+      }
+
+      match /orderCounters/{id} {
+        allow read, write: if false;
       }
 
       match /auditLogs/{id} {

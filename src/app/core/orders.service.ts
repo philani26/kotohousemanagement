@@ -43,6 +43,19 @@ export class OrdersService {
     return this.write(updateDoc(this.biz.docRef('orders', saleId), { receiptNo, updatedBy: this.auth.uid(), updatedAt: serverTimestamp() }));
   }
 
+  /** A WhatsApp order was charged at the till: link the sale and mark it paid. */
+  markPaid(orderId: string, saleId: string, receiptNo: number | null) {
+    return this.write(
+      updateDoc(this.biz.docRef('orders', orderId), {
+        paid: true,
+        saleId,
+        ...(receiptNo ? { receiptNo } : {}),
+        updatedBy: this.auth.uid(),
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  }
+
   setStatus(order: Order, status: OrderStatus) {
     const field = STAMP_FIELD[status];
     return this.write(

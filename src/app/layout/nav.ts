@@ -20,6 +20,8 @@ export const OWNER_NAV: NavItem[] = [
   { path: '/cash', label: 'Cash-ups', ico: '💰', group: 'Owner' },
   { path: '/reports', label: 'Reports', ico: '📈', group: 'Owner' },
   { path: '/notifications', label: 'Alerts', ico: '🔔', group: 'Owner' },
+  { path: '/whatsapp', label: 'WhatsApp', ico: '💬', group: 'Owner' },
+  { path: '/devices', label: 'Devices', ico: '📱', group: 'Owner' },
   { path: '/audit', label: 'Activity log', ico: '🕵️', group: 'Owner' },
   { path: '/cctv', label: 'CCTV', ico: '📹', group: 'Owner' },
   { path: '/products', label: 'Menu & recipes', ico: '📋', group: 'Setup' },

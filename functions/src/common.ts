@@ -17,7 +17,7 @@ import {
   BusinessSettings,
   COLLECTIONS,
   DEFAULT_SETTINGS,
-  Employee,
+  Employee,  
   Role,
   SETTINGS_DOC_ID,
   Shift,
@@ -50,8 +50,8 @@ export function bizRef(businessId: string): DocumentReference {
   return db.collection(COLLECTIONS.businesses).doc(businessId);
 }
 
-export function col(businessId: string, name: Exclude<Collection, 'users' | 'businesses'>): CollectionReference {
-  return bizRef(businessId).collection(COLLECTIONS[name]);
+export function col(businessId: string, name: Exclude<Collection, 'users' | 'businesses'> | 'orderCounters' | 'whatsappInbound'): CollectionReference {
+  return bizRef(businessId).collection(name in COLLECTIONS ? COLLECTIONS[name as Collection] : name);
 }
 
 export function settingsRef(businessId: string): DocumentReference {
@@ -65,6 +65,9 @@ export function withSettingsDefaults(data: Partial<BusinessSettings> | undefined
     thresholds: { ...DEFAULT_SETTINGS.thresholds, ...(data?.thresholds ?? {}) },
     notifications: { ...DEFAULT_SETTINGS.notifications, ...(data?.notifications ?? {}) },
     cctv: { ...DEFAULT_SETTINGS.cctv, ...(data?.cctv ?? {}) },
+    whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(data?.whatsapp ?? {}) },
+    geofence: { ...DEFAULT_SETTINGS.geofence, ...(data?.geofence ?? {}) },
+    devices: { ...DEFAULT_SETTINGS.devices, ...(data?.devices ?? {}) },
   };
 }
 
@@ -91,7 +94,11 @@ export interface Caller {
  * The app sends the shop it is working in as `businessId`; the caller must
  * be a member of that shop. Without it, the default shop from the claims is used.
  */
-export async function requireCaller(req: CallableRequest, roles: Role[] = ['owner', 'employee']): Promise<Caller> {
+export async function requireCaller(
+  req: CallableRequest,
+  roles: Role[] = ['owner', 'employee'],
+  opts: { skipSiteCheck?: boolean; skipDeviceCheck?: boolean } = {},
+): Promise<Caller> {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Please sign in');
   const token = req.auth.token as Partial<UserClaims>;
   const memberships = claimMemberships(token);
@@ -104,6 +111,22 @@ export async function requireCaller(req: CallableRequest, roles: Role[] = ['owne
   const emp = await col(businessId, 'employees').doc(req.auth.uid).get();
   const data = emp.data() as Employee | undefined;
   if (!data || !data.active) throw new HttpsError('permission-denied', 'Your account has been deactivated');
+  // Work-site check: staff must have checked in at the shop (owners can work from anywhere).
+  if (role !== 'owner' && (!opts.skipSiteCheck || !opts.skipDeviceCheck)) {
+    const settings = (await settingsRef(businessId).get()).data() ?? {};
+    const fence = settings['geofence'] as { enabled?: boolean } | undefined;
+    const until = (data.siteCheckUntil as Timestamp | undefined)?.toMillis() ?? 0;
+    if (!opts.skipSiteCheck && fence?.enabled && until < Date.now()) {
+      throw new HttpsError('permission-denied', 'Check in at the shop first: open the app at work and allow your location');
+    }
+    // Approved shop devices: the app sends its device id with every call.
+    const lock = (settings['devices'] as { lockToApproved?: boolean } | undefined)?.lockToApproved;
+    if (!opts.skipDeviceCheck && lock) {
+      const deviceId = (req.data as { deviceId?: unknown } | null)?.deviceId;
+      const device = typeof deviceId === 'string' && deviceId ? (await col(businessId, 'devices').doc(deviceId).get()).get('status') : null;
+      if (device !== 'approved') throw new HttpsError('permission-denied', 'This phone is not an approved shop device. Ask the owner to approve it.');
+    }
+  }
   return { uid: req.auth.uid, businessId, role, name: data.displayName };
 }
 

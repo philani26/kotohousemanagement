@@ -1,4 +1,5 @@
 import { Cents } from './money';
+import { DeviceStatus, Span } from './devices';
 import { CartItem } from './domain';
 import { ChecklistAnswer, PaymentMethod, Role, StockCountLine, StockMovementType } from './models';
 
@@ -86,6 +87,25 @@ export interface Api {
     { movementId?: string; approvalId?: string },
   ];
 
+  deviceHeartbeat: [
+    {
+      deviceId: string;
+      userAgent: string;
+      batteryPct?: number | null;
+      charging?: boolean | null;
+      spans?: Span[];
+      location?: { lat: number; lng: number; accuracyM: number } | null;
+    },
+    { status: DeviceStatus; code: string; shareLocation: boolean },
+  ];
+  createDeviceInvite: [{ label: string }, { code: string; expiresAtMillis: number }];
+  pairDevice: [{ code: string; deviceId: string; userAgent: string }, { status: DeviceStatus; label: string }];
+  setDevice: [{ deviceId: string; status?: DeviceStatus; label?: string }, { ok: true }];
+  checkIn: [
+    { lat: number; lng: number; accuracyM: number },
+    { ok: boolean; distanceM?: number; reason?: 'inaccurate' | 'outside' | 'not-configured'; until?: number },
+  ];
+  linkWhatsapp: [{ ordering: boolean; phoneNumberId: string; displayNumber: string }, { ok: true }];
   decideApproval: [{ approvalId: string; approve: boolean; note?: string }, { ok: true }];
 }
 

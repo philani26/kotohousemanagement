@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { homeRedirect, ownerGuard, signedOutGuard, staffGuard } from './core/guards';
+import { homeRedirect, kitchenGuard, ownerGuard, signedOutGuard, staffGuard } from './core/guards';
 import { ShellComponent } from './layout/shell.component';
 
 export const routes: Routes = [
@@ -9,6 +9,7 @@ export const routes: Routes = [
     path: '',
     component: ShellComponent,
     canActivate: [staffGuard],
+    canActivateChild: [kitchenGuard],
     children: [
       { path: '', pathMatch: 'full', canActivate: [homeRedirect], children: [] },
       // Staff
@@ -32,6 +33,8 @@ export const routes: Routes = [
           { path: 'employees', title: 'Staff', loadComponent: () => import('./features/owner/employees.page').then((m) => m.EmployeesPage) },
           { path: 'audit', title: 'Activity log', loadComponent: () => import('./features/owner/audit.page').then((m) => m.AuditPage) },
           { path: 'notifications', title: 'Alerts', loadComponent: () => import('./features/owner/notifications.page').then((m) => m.NotificationsPage) },
+          { path: 'devices', title: 'Devices', loadComponent: () => import('./features/owner/devices.page').then((m) => m.DevicesPage) },
+          { path: 'whatsapp', title: 'WhatsApp', loadComponent: () => import('./features/owner/whatsapp.page').then((m) => m.WhatsappPage) },
           { path: 'shops', title: 'My shops', loadComponent: () => import('./features/owner/shops.page').then((m) => m.ShopsPage) },
           { path: 'settings', title: 'Settings', loadComponent: () => import('./features/owner/settings.page').then((m) => m.SettingsPage) },
           { path: 'cctv', title: 'CCTV', loadComponent: () => import('./features/owner/cctv.page').then((m) => m.CctvPage) },

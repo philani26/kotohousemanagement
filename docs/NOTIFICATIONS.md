@@ -30,6 +30,8 @@ Scheduled alerts use deterministic ids, so each is raised only once.
 
 ## WhatsApp
 
+Customers can already **order** on WhatsApp and are told when their order is ready (see [WHATSAPP.md](WHATSAPP.md)). The notes below are about sending **owner alerts** to WhatsApp as well.
+
 WhatsApp messages need the **WhatsApp Business Platform (Cloud API)**: a Meta Business account, a verified business phone number and approved message templates, either directly or through a provider (Twilio, 360dialog, Clickatell…). There are per-conversation charges.
 
 It's intentionally **not implemented** until a provider has been chosen and approved. To add it:

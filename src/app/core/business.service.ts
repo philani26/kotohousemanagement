@@ -27,12 +27,16 @@ export class BusinessService {
       thresholds: { ...DEFAULT_SETTINGS.thresholds, ...(s?.thresholds ?? {}) },
       notifications: { ...DEFAULT_SETTINGS.notifications, ...(s?.notifications ?? {}) },
       cctv: { ...DEFAULT_SETTINGS.cctv, ...(s?.cctv ?? {}) },
+      whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(s?.whatsapp ?? {}) },
+      geofence: { ...DEFAULT_SETTINGS.geofence, ...(s?.geofence ?? {}) },
+      devices: { ...DEFAULT_SETTINGS.devices, ...(s?.devices ?? {}) },
     };
   });
 
   /** The shop runs a single till, so there is at most one open shift. */
   private readonly openShifts = liveQuery<Shift>(() =>
-    this.auth.businessId() ? query(this.col('shifts'), where('status', '==', 'open'), limit(1)) : null,
+    // the kitchen has no access to shifts
+    this.auth.businessId() && !this.auth.isKitchen() ? query(this.col('shifts'), where('status', '==', 'open'), limit(1)) : null,
   );
   readonly openShift = computed(() => this.openShifts.data()[0] ?? null);
   readonly openShiftLoading = this.openShifts.loading;

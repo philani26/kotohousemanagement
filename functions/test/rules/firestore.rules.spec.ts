@@ -150,6 +150,100 @@ describe('orders (kitchen queue)', () => {
   });
 });
 
+describe('kitchen role', () => {
+  const kitchen = () => env.authenticatedContext('chef1', { businessId: B, role: 'kitchen', biz: { [B]: 'kitchen' } }).firestore();
+  const ticket = { id: 'k1', lines: [{ name: 'Russian Kota', quantity: 1 }], status: 'new', createdAtMillis: 1, createdBy: 'emp1', createdByName: 'Sipho', dayKey: '2026-10-31', updatedBy: 'emp1' };
+
+  it('sees the order queue and moves tickets to preparing and ready', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), p('orders', 'k1')), ticket));
+    await assertSucceeds(getDoc(doc(kitchen(), p('orders', 'k1'))));
+    await assertSucceeds(updateDoc(doc(kitchen(), p('orders', 'k1')), { status: 'preparing', preparingAt: 2, updatedBy: 'chef1', updatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(kitchen(), p('orders', 'k1')), { status: 'ready', readyAt: 3, updatedBy: 'chef1', updatedAt: serverTimestamp() }));
+  });
+
+  it('hands over paid orders, but never an unpaid WhatsApp order', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), p('orders', 'k1')), { ...ticket, status: 'ready' }));
+    await assertSucceeds(updateDoc(doc(kitchen(), p('orders', 'k1')), { status: 'collected', collectedAt: 4, updatedBy: 'chef1', updatedAt: serverTimestamp() }));
+
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), p('orders', 'w1')), { ...ticket, id: 'w1', status: 'ready', source: 'whatsapp', paid: false }));
+    await assertFails(updateDoc(doc(kitchen(), p('orders', 'w1')), { status: 'collected', collectedAt: 4, updatedBy: 'chef1', updatedAt: serverTimestamp() }));
+    await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), p('orders', 'w1')), { paid: true }));
+    await assertSucceeds(updateDoc(doc(kitchen(), p('orders', 'w1')), { status: 'collected', collectedAt: 5, updatedBy: 'chef1', updatedAt: serverTimestamp() }));
+  });
+
+  it('cannot mark paid or create tickets', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), p('orders', 'k1')), ticket));
+    await assertFails(updateDoc(doc(kitchen(), p('orders', 'k1')), { paid: true, updatedBy: 'chef1', updatedAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(kitchen(), p('orders', 'k2')), { ...ticket, id: 'k2', createdBy: 'chef1', updatedBy: 'chef1', updatedAt: serverTimestamp() }));
+  });
+
+  it('sees no money, stock or sales', async () => {
+    await assertFails(getDoc(doc(kitchen(), p('sales', 's-emp'))));
+    await assertFails(getDoc(doc(kitchen(), p('cashSessions', 'c1'))));
+    await assertFails(getDoc(doc(kitchen(), p('ingredients', 'bread'))));
+    await assertFails(getDoc(doc(kitchen(), p('products', 'basic'))));
+    await assertFails(getDoc(doc(kitchen(), p('auditLogs', 'a1'))));
+  });
+});
+
+describe('work-site check (geofence)', () => {
+  const kitchen = () => env.authenticatedContext('chef1', { businessId: B, role: 'kitchen', biz: { [B]: 'kitchen' } }).firestore();
+  const ticket = { id: 'g1', lines: [{ name: 'Basic Kota', quantity: 1 }], status: 'new', createdAtMillis: 1, createdBy: 'emp1', createdByName: 'Sipho', dayKey: '2026-10-31', updatedBy: 'emp1' };
+  const move = () => updateDoc(doc(kitchen(), p('orders', 'g1')), { status: 'preparing', preparingAt: 2, updatedBy: 'chef1', updatedAt: serverTimestamp() });
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), p('orders', 'g1')), ticket);
+      await setDoc(doc(ctx.firestore(), p('businessSettings', 'main')), { geofence: { enabled: true, lat: -26.2, lng: 27.8, radiusM: 150 } });
+      await setDoc(doc(ctx.firestore(), p('employees', 'chef1')), { role: 'kitchen', active: true });
+    });
+  });
+
+  it('blocks staff who have not checked in at the shop', async () => {
+    await assertFails(move());
+  });
+
+  it('allows staff after a check-in, until it expires', async () => {
+    await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), p('employees', 'chef1')), { siteCheckUntil: new Date(Date.now() + 3_600_000) }));
+    await assertSucceeds(move());
+    await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), p('employees', 'chef1')), { siteCheckUntil: new Date(Date.now() - 1000) }));
+    await assertFails(updateDoc(doc(kitchen(), p('orders', 'g1')), { status: 'ready', readyAt: 3, updatedBy: 'chef1', updatedAt: serverTimestamp() }));
+  });
+
+  it('never blocks the owner, and staff cannot give themselves a check-in', async () => {
+    await assertSucceeds(updateDoc(doc(owner(), p('orders', 'g1')), { status: 'preparing', updatedBy: 'owner1', updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(kitchen(), p('employees', 'chef1')), { siteCheckUntil: new Date(Date.now() + 3_600_000) }));
+  });
+});
+
+describe('approved shop devices', () => {
+  const kitchen = () => env.authenticatedContext('chef1', { businessId: B, role: 'kitchen', biz: { [B]: 'kitchen' } }).firestore();
+  const ticket = { id: 'd1', lines: [{ name: 'Basic Kota', quantity: 1 }], status: 'new', createdAtMillis: 1, createdBy: 'emp1', createdByName: 'Sipho', dayKey: '2026-10-31', updatedBy: 'emp1' };
+  const move = () => updateDoc(doc(kitchen(), p('orders', 'd1')), { status: 'preparing', preparingAt: 2, updatedBy: 'chef1', updatedAt: serverTimestamp() });
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), p('orders', 'd1')), ticket);
+      await setDoc(doc(ctx.firestore(), p('businessSettings', 'main')), { devices: { lockToApproved: true, awayAlertMinutes: 60 } });
+      await setDoc(doc(ctx.firestore(), p('employees', 'chef1')), { role: 'kitchen', active: true, deviceOkUntil: null });
+    });
+  });
+
+  it('blocks staff on unapproved devices and allows approved ones', async () => {
+    await assertFails(move());
+    await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), p('employees', 'chef1')), { deviceOkUntil: new Date(Date.now() + 3_600_000) }));
+    await assertSucceeds(move());
+  });
+
+  it('device log and activity are owner-only and read-only', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), p('devices', 'x')), { status: 'approved' }));
+    await assertSucceeds(getDoc(doc(owner(), p('devices', 'x'))));
+    await assertFails(getDoc(doc(kitchen(), p('devices', 'x'))));
+    await assertFails(setDoc(doc(owner(), p('devices', 'x')), { status: 'approved' }));
+    await assertFails(getDoc(doc(employee(), p('activity', 'emp1_2026-10-31'))));
+  });
+});
+
 describe('catalogue', () => {
   it('employees cannot change prices', async () => {
     await assertFails(updateDoc(doc(employee(), p('products', 'basic')), { priceCents: 100, updatedBy: 'emp1', updatedAt: serverTimestamp() }));

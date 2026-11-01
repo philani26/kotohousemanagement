@@ -4,6 +4,7 @@ import { ApiName, ApiRequest, ApiResponse } from '@shared/api';
 import { environment } from '../../environments/environment';
 import { AuthService } from './auth.service';
 import { FirebaseService } from './firebase.service';
+import { deviceId } from './device-id';
 
 /** Error from a callable, keeping whether it was a network problem (safe to queue/retry). */
 export class ApiError extends Error {
@@ -28,8 +29,9 @@ export class ApiService {
     try {
       // Tell the backend which shop this device is working in; it checks membership.
       // A businessId already in the data (queued offline sales) wins.
+      // Also send this device's id: when the owner locks work to approved devices, the server checks it.
       const businessId = this.auth.businessId();
-      return (await fn(businessId ? { businessId, ...data } : data)).data;
+      return (await fn({ deviceId: deviceId(), ...(businessId ? { businessId } : {}), ...data })).data;
     } catch (err) {
       const e = err as { code?: string };
       throw new ApiError(friendlyError(err), e?.code ?? 'unknown', isNetworkError(err));

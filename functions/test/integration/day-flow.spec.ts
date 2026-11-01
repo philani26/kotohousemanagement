@@ -17,6 +17,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 import { Functions, connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/functions';
@@ -364,8 +365,165 @@ describe('a trading day', () => {
     ).rejects.toThrow(/Only 0 each of Russian in stock/);
   });
 
+  it('takes orders on WhatsApp and tells the customer when it is ready', async () => {
+    const inB2 = { businessId: b2 } as Record<string, unknown>;
+    await owner.call('linkWhatsapp', { ordering: true, phoneNumberId: '1098765432', displayNumber: '+27 82 000 0000', ...inB2 } as never);
+    // trade all day so the test does not depend on the clock
+    await setDoc(doc(owner.db, 'businesses', b2, 'businessSettings', 'main'), { openingHour: 0, closingHour: 24, tradingDays: [0, 1, 2, 3, 4, 5, 6], ...stamp(ownerUid) }, { merge: true });
+
+    const customer = '27820000001';
+    let msgNo = 0;
+    const send = async (text: string, id = `wamid.${run}.${++msgNo}`) => {
+      const res = await fetch('http://127.0.0.1:' + FUNCTIONS_PORT + '/' + PROJECT + '/' + REGION + '/whatsappWebhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entry: [{ changes: [{ value: {
+          metadata: { phone_number_id: '1098765432' },
+          contacts: [{ wa_id: customer, profile: { name: 'Lerato' } }],
+          messages: [{ id, from: customer, type: 'text', text: { body: text } }],
+        } }] }] }),
+      });
+      expect(res.status).toBe(200);
+      return id;
+    };
+    const outgoing = async () =>
+      (await getDocs(query(collection(owner.db, 'businesses', b2, 'whatsappMessages'), where('direction', '==', 'out')))).docs.map((d) => d.get('text') as string);
+
+    await send('hi');
+    expect((await outgoing()).some((m) => m.includes('1. Russian Kota'))).toBe(true);
+
+    await send('1x2');
+    const yesId = await send('note: extra chips');
+    await send('yes');
+    const orders = await getDocs(query(collection(owner.db, 'businesses', b2, 'orders'), where('source', '==', 'whatsapp')));
+    expect(orders.size).toBe(1);
+    const order = orders.docs[0];
+    expect(order.get('ticketNo')).toBe(1);
+    expect(order.get('totalCents')).toBe(10000);
+    expect(order.get('paid')).toBe(false);
+    expect(order.get('note')).toBe('extra chips');
+    expect(order.get('customerName')).toBe('Lerato');
+    expect((await outgoing()).some((m) => m.includes('Order *#W1* received'))).toBe(true);
+
+    // WhatsApp re-delivering a message must not run it twice
+    const before = (await outgoing()).length;
+    await send('note: extra chips', yesId);
+    expect((await outgoing()).length).toBe(before);
+
+    // staff mark it ready → the customer is told to come and collect
+    await updateDoc(order.ref, { status: 'ready', readyAt: Date.now(), updatedBy: ownerUid, updatedAt: serverTimestamp() });
+    let told = false;
+    for (let i = 0; i < 30 && !told; i++) {
+      told = (await outgoing()).some((m) => m.includes('#W1 is *ready to collect*'));
+      if (!told) await new Promise((r) => setTimeout(r, 500));
+    }
+    expect(told).toBe(true);
+  });
+
+  it('gives kitchen staff the order queue but no till or money functions', async () => {
+    await owner.call('createEmployee', { email: `chef-${run}@example.co.za`, password: 'chef-pass-123', displayName: 'Chef Mandla', role: 'kitchen' });
+    const chef = client('chef');
+    await signInWithEmailAndPassword(chef.auth, `chef-${run}@example.co.za`, 'chef-pass-123');
+    await expect(chef.call('openShift', { openingFloatCents: 100, checklist: [] })).rejects.toThrow(/not allowed/);
+    await expect(
+      chef.call('recordSale', { saleId: `chef${run}abcdefghijk`, items: [{ productId: ids.basic, quantity: 1 }], payment: { method: 'card' } }),
+    ).rejects.toThrow(/not allowed/);
+    await expect(chef.call('setupBusiness', { businessName: 'Chef shop', displayName: 'Mandla' })).rejects.toThrow(/Only a shop owner/);
+    const orders = await getDocs(query(collection(chef.db, bpath('orders')), where('dayKey', '>=', '2000-01-01')));
+    expect(orders.size).toBeGreaterThanOrEqual(0); // readable
+    await expect(getDocs(query(collection(chef.db, bpath('sales')), where('employeeId', '==', 'x')))).rejects.toThrow();
+    await deleteApp(chef.app);
+  });
+
   it('only owners can add shops', async () => {
     await expect(cashier.call('setupBusiness', { businessName: 'My own', displayName: 'Sipho' })).rejects.toThrow(/Only a shop owner/);
+  });
+
+  it('only lets staff work after checking in at the shop (geofence)', async () => {
+    const shop = { lat: -26.2485, lng: 27.854 };
+    await setDoc(doc(owner.db, bpath('businessSettings', 'main')), { geofence: { enabled: true, ...shop, radiusM: 150 }, ...stamp(ownerUid) }, { merge: true });
+
+    await expect(cashier.call('openShift', { openingFloatCents: 1000, checklist: [] })).rejects.toThrow(/Check in at the shop first/);
+
+    const far = await cashier.call('checkIn', { lat: -26.1076, lng: 28.0567, accuracyM: 15 }); // Sandton, ~25 km
+    expect(far.ok).toBe(false);
+    expect(far.reason).toBe('outside');
+    const alerts = await getDocs(query(collection(owner.db, bpath('notifications')), where('type', '==', 'siteBlocked')));
+    expect(alerts.size).toBe(1);
+    expect(alerts.docs[0].get('message')).toMatch(/km from the shop/);
+    // only the distance is kept, never the location
+    expect(JSON.stringify(alerts.docs[0].data())).not.toContain('28.05');
+
+    const near = await cashier.call('checkIn', { lat: shop.lat + 0.0004, lng: shop.lng, accuracyM: 20 });
+    expect(near.ok).toBe(true);
+    const opened = await cashier.call('openShift', { openingFloatCents: 1000, checklist: [] });
+    expect(opened.shiftId).toBeTruthy();
+
+    // owners are never blocked
+    await expect(owner.call('recordPayout', { amountCents: 100, reason: 'owner test' })).resolves.toEqual({ ok: true });
+    await setDoc(doc(owner.db, bpath('businessSettings', 'main')), { geofence: { enabled: false, lat: null, lng: null, radiusM: 150 }, ...stamp(ownerUid) }, { merge: true });
+  });
+
+  it('only lets staff work on approved shop devices, and tracks away-from-app time', async () => {
+    await setDoc(
+      doc(owner.db, bpath('businessSettings', 'main')),
+      { devices: { lockToApproved: true, awayAlertMinutes: 30 }, openingHour: 0, closingHour: 24, tradingDays: [0, 1, 2, 3, 4, 5, 6], ...stamp(ownerUid) },
+      { merge: true },
+    );
+    const deviceId = `dev-${run}-abcdef1234`;
+    const ua = 'Mozilla/5.0 (Linux; Android 14; SM-A146B Build/UP1A) AppleWebKit/537.36 Chrome/129.0 Mobile Safari/537.36';
+
+    const first = await cashier.call('deviceHeartbeat', { deviceId, userAgent: ua, batteryPct: 64, charging: false });
+    expect(first.status).toBe('pending');
+    const waiting = await getDocs(query(collection(owner.db, bpath('notifications')), where('type', '==', 'newDevice')));
+    expect(waiting.size).toBe(1);
+
+    await expect(cashier.call('recordPayout', { amountCents: 100, reason: 'test', deviceId } as never)).rejects.toThrow(/not an approved shop device/);
+    await owner.call('setDevice', { deviceId, status: 'approved', label: 'Till phone' });
+    await expect(cashier.call('recordPayout', { amountCents: 100, reason: 'test', deviceId } as never)).resolves.toEqual({ ok: true });
+
+    const dev = (await getDoc(doc(owner.db, bpath('devices', deviceId)))).data()!;
+    expect(dev['label']).toBe('Till phone');
+    expect(dev['batteryPct']).toBe(64);
+    expect(dev['lastUserName']).toBe('Sipho');
+
+    // 35 minutes off screen, reported twice (a retry) – counted once, and over the 30 min limit
+    const span = { from: Date.now() - 40 * 60_000, to: Date.now() - 5 * 60_000 };
+    await cashier.call('deviceHeartbeat', { deviceId, userAgent: ua, spans: [span] });
+    await cashier.call('deviceHeartbeat', { deviceId, userAgent: ua, spans: [span] });
+    const days = await getDocs(collection(owner.db, bpath('activity')));
+    const mine = days.docs.map((x) => x.data()).find((x) => x['name'] === 'Sipho')!;
+    expect(Math.round(mine['awayMs'] / 60_000)).toBe(35);
+    const away = await getDocs(query(collection(owner.db, bpath('notifications')), where('type', '==', 'awayTime')));
+    expect(away.size).toBe(1);
+
+    // location: only stored when the owner switched sharing on
+    const here = { lat: -26.2486, lng: 27.8541, accuracyM: 12 };
+    await cashier.call('deviceHeartbeat', { deviceId, userAgent: ua, location: here });
+    expect((await getDoc(doc(owner.db, bpath('devices', deviceId)))).get('lastLocation')).toBeNull();
+    await setDoc(doc(owner.db, bpath('businessSettings', 'main')), { devices: { lockToApproved: true, awayAlertMinutes: 30, shareLocation: true }, ...stamp(ownerUid) }, { merge: true });
+    const shared = await cashier.call('deviceHeartbeat', { deviceId, userAgent: ua, location: here });
+    expect(shared.shareLocation).toBe(true);
+    const located = (await getDoc(doc(owner.db, bpath('devices', deviceId)))).data()!;
+    expect(located['lastLocation']).toMatchObject({ lat: -26.2486, lng: 27.8541, accuracyM: 12 });
+    expect(located['trail']).toHaveLength(1);
+
+    // pairing: the owner makes a code, a new phone enters it and is approved straight away
+    const invite = await owner.call('createDeviceInvite', { label: 'Kitchen tablet' });
+    expect(invite.code).toMatch(/^\d{6}$/);
+    const tabletId = `tab-${run}-abcdef1234`;
+    const paired = await cashier.call('pairDevice', { code: invite.code, deviceId: tabletId, userAgent: ua });
+    expect(paired).toEqual({ status: 'approved', label: 'Kitchen tablet' });
+    await expect(cashier.call('pairDevice', { code: invite.code, deviceId: `other-${run}-abcdef12`, userAgent: ua })).rejects.toThrow(/wrong or has expired/);
+    await expect(cashier.call('recordPayout', { amountCents: 100, reason: 'tablet', deviceId: tabletId } as never)).resolves.toEqual({ ok: true });
+
+    // blocking the device stops it again
+    await owner.call('setDevice', { deviceId, status: 'blocked' });
+    await expect(cashier.call('recordPayout', { amountCents: 100, reason: 'test', deviceId } as never)).rejects.toThrow(/not an approved/);
+    // ...and a pairing code cannot unblock it
+    const second = await owner.call('createDeviceInvite', { label: 'Sneaky' });
+    await expect(cashier.call('pairDevice', { code: second.code, deviceId, userAgent: ua })).rejects.toThrow(/cannot unblock/);
+    await setDoc(doc(owner.db, bpath('businessSettings', 'main')), { devices: { lockToApproved: false, awayAlertMinutes: 60 }, ...stamp(ownerUid) }, { merge: true });
   });
 
   it('prevents a deactivated cashier from trading', async () => {

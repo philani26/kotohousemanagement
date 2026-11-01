@@ -1,4 +1,6 @@
 import { Cents } from './money';
+import { DEFAULT_GEOFENCE, GeofenceSettings } from './geo';
+import { DEFAULT_DEVICE_SETTINGS, DeviceSettings } from './devices';
 
 /**
  * Firestore data model. Every business-owned collection lives under
@@ -12,7 +14,8 @@ export interface TimestampLike {
   toDate(): Date;
 }
 
-export type Role = 'owner' | 'employee';
+/** owner: everything · employee: cashier · kitchen: sees the order queue only */
+export type Role = 'owner' | 'employee' | 'kitchen';
 export type PaymentMethod = 'cash' | 'card' | 'eft';
 export const PAYMENT_METHODS: readonly PaymentMethod[] = ['cash', 'card', 'eft'];
 
@@ -32,7 +35,7 @@ export interface UserClaims {
 export function claimMemberships(token: Partial<UserClaims> | undefined | null): Record<string, Role> {
   const out: Record<string, Role> = {};
   if (token?.businessId && token.role) out[token.businessId] = token.role;
-  for (const [b, r] of Object.entries(token?.biz ?? {})) if (r === 'owner' || r === 'employee') out[b] = r;
+  for (const [b, r] of Object.entries(token?.biz ?? {})) if (r === 'owner' || r === 'employee' || r === 'kitchen') out[b] = r;
   return out;
 }
 
@@ -56,6 +59,11 @@ export const COLLECTIONS = {
   businessSettings: 'businessSettings',
   dailyStats: 'dailyStats',
   orders: 'orders',
+  whatsappChats: 'whatsappChats',
+  whatsappMessages: 'whatsappMessages',
+  devices: 'devices',
+  activity: 'activity',
+  deviceInvites: 'deviceInvites',
 } as const;
 
 export const SETTINGS_DOC_ID = 'main';
@@ -89,6 +97,13 @@ export interface Employee {
   active: boolean;
   createdAt: TimestampLike;
   createdBy: string;
+  /** set by the checkIn function when the worker was at the shop; valid until this time */
+  siteCheckUntil?: TimestampLike;
+  /** distance from the shop at the last check-in, in metres (no location is stored) */
+  siteCheckDistanceM?: number;
+  /** device this person last used, and until when it counts as an approved shop device */
+  deviceId?: string;
+  deviceOkUntil?: TimestampLike | null;
 }
 
 /** A menu category. `extras` is special: its products stay off the order queue by default. */
@@ -280,9 +295,22 @@ export interface Order {
   id: string;
   /** receipt number once the sale has reached the server */
   receiptNo?: number | null;
+  /** what the kitchen prepares (extras left out) */
   lines: { name: string; quantity: number }[];
   note?: string;
   status: OrderStatus;
+  /** where the order came from; tickets without it were made at the till */
+  source?: 'till' | 'whatsapp';
+  /** daily order number customers are told on WhatsApp */
+  ticketNo?: number;
+  customerPhone?: string;
+  customerName?: string;
+  /** WhatsApp orders: the full order, so the till can charge it at collection */
+  items?: { productId: string; name: string; quantity: number; priceCents: number }[];
+  totalCents?: number;
+  /** WhatsApp orders are paid at collection; set once the till has charged it */
+  paid?: boolean;
+  saleId?: string;
   /** device time, so offline orders sort correctly before they sync */
   createdAtMillis: number;
   createdBy: string;
@@ -439,7 +467,11 @@ export type NotificationType =
   | 'cashPayout'
   | 'notOpened'
   | 'priceMismatch'
-  | 'outOfStock';
+  | 'outOfStock'
+  | 'whatsappOrder'
+  | 'siteBlocked'
+  | 'awayTime'
+  | 'newDevice';
 
 export type Severity = 'info' | 'warning' | 'critical';
 
@@ -507,6 +539,18 @@ export interface BusinessSettings {
     /** WhatsApp requires an approved WhatsApp Business API provider – off until configured. */
     whatsapp: boolean;
     whatsappTo: string[];
+  };
+  /** staff (not owners) can only work after checking in at the shop */
+  geofence: GeofenceSettings;
+  /** approved shop devices and away-from-app alerts */
+  devices: DeviceSettings;
+  /** customers order on WhatsApp; needs a WhatsApp Business Platform number (docs/WHATSAPP.md) */
+  whatsapp: {
+    ordering: boolean;
+    /** Meta's id for the shop's WhatsApp number */
+    phoneNumberId: string;
+    /** the number customers message, e.g. +27 82 123 4567 */
+    displayNumber: string;
   };
   cctv: {
     provider: string;
@@ -591,5 +635,8 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
     'Doors and windows locked',
   ],
   notifications: { email: false, emailTo: [], whatsapp: false, whatsappTo: [] },
+  whatsapp: { ordering: false, phoneNumberId: '', displayNumber: '' },
+  geofence: DEFAULT_GEOFENCE,
+  devices: DEFAULT_DEVICE_SETTINGS,
   cctv: { provider: '', viewerUrl: '', androidAppUrl: '', iosAppUrl: '', notes: '' },
 };

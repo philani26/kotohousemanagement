@@ -6,13 +6,17 @@ import { AuthService } from '../core/auth.service';
 import { BusinessService } from '../core/business.service';
 import { liveQuery } from '../core/live';
 import { OutboxService } from '../core/outbox.service';
+import { SiteCheckService } from '../core/site-check.service';
+import { SiteCheckComponent } from '../shared/site-check.component';
+import { DeviceService } from '../core/device.service';
+import { DeviceBlockedComponent } from '../shared/device-blocked.component';
 import { ToastService } from '../core/toast.service';
 import { NavItem, OWNER_NAV, STAFF_NAV } from './nav';
 import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, SiteCheckComponent, DeviceBlockedComponent],
   template: `
     <div class="app">
       <header class="topbar">
@@ -31,9 +35,11 @@ import { environment } from '../../environments/environment';
             {{ envName === 'local' ? 'LOCAL' : 'DEV · TEST' }}
           </span>
         }
-        <span class="shift-pill" [class.open]="biz.openShift()">
-          {{ biz.openShift() ? 'Open · ' + biz.openShift()!.employeeName : 'Closed' }}
-        </span>
+        @if (!auth.isKitchen()) {
+          <span class="shift-pill" [class.open]="biz.openShift()">
+            {{ biz.openShift() ? 'Open · ' + biz.openShift()!.employeeName : 'Closed' }}
+          </span>
+          }
         @if (outbox.count() || !outbox.online()) {
           <span class="shift-pill" style="background: var(--warn)" title="Sales are saved on this phone and sent when the internet is back">
             Offline{{ outbox.count() ? ' · ' + outbox.count() + ' to send' : '' }}
@@ -49,7 +55,7 @@ import { environment } from '../../environments/environment';
           </a>
         }
         <div class="who">
-          {{ auth.displayName() }}<br /><span class="tiny" style="color: #fff9">{{ auth.isOwner() ? 'Owner' : 'Staff' }}</span>
+          {{ auth.displayName() }}<br /><span class="tiny" style="color: #fff9">{{ auth.isOwner() ? 'Owner' : auth.isKitchen() ? 'Kitchen' : 'Staff' }}</span>
         </div>
         <button class="icon-btn" (click)="signOut()" [style.opacity]="mustCloseShift() ? 0.4 : 1"
           [title]="mustCloseShift() ? 'Close your shift before signing out' : 'Sign out'" aria-label="Sign out">⎋</button>
@@ -73,7 +79,20 @@ import { environment } from '../../environments/environment';
       </nav>
 
       <main class="content">
-        <router-outlet />
+        @switch (device.blocked() ? 'device' : site.state()) {
+          @case ('device') {
+            <app-device-blocked />
+          }
+          @case ('required') {
+            <app-site-check />
+          }
+          @case ('loading') {
+            <p class="empty">Checking your work site…</p>
+          }
+          @default {
+            <router-outlet />
+          }
+        }
       </main>
 
       <nav class="bottomnav" aria-label="Main">
@@ -106,11 +125,17 @@ export class ShellComponent {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   protected readonly outbox = inject(OutboxService);
+  /** staff must check in at the shop first when the owner turned the geofence on */
+  protected readonly site = inject(SiteCheckService);
+  /** staff may only work on approved shop devices when the owner switched that on */
+  protected readonly device = inject(DeviceService);
   protected readonly more = signal(false);
   protected readonly envName = environment.name;
   protected readonly shopCount = computed(() => Object.keys(this.auth.memberships()).length);
 
-  protected readonly allItems = computed<NavItem[]>(() => (this.auth.isOwner() ? [...OWNER_NAV, ...STAFF_NAV] : STAFF_NAV));
+  protected readonly allItems = computed<NavItem[]>(() =>
+    this.auth.isOwner() ? [...OWNER_NAV, ...STAFF_NAV] : this.auth.isKitchen() ? STAFF_NAV.filter((i) => i.path === '/orders') : STAFF_NAV,
+  );
   protected readonly groups = computed(() => {
     const items = this.allItems();
     return (['Owner', 'Shop', 'Setup'] as const)
@@ -118,7 +143,9 @@ export class ShellComponent {
       .filter((g) => g.items.length);
   });
   protected readonly bottom = computed(() =>
-    this.auth.isOwner()
+    this.auth.isKitchen()
+      ? this.allItems()
+      : this.auth.isOwner()
       ? [OWNER_NAV[0], OWNER_NAV[1], STAFF_NAV[0], STAFF_NAV[1]]
       : [STAFF_NAV[0], STAFF_NAV[1], STAFF_NAV[2], STAFF_NAV[3]], // Sell, Orders, Shift, Sales
   );

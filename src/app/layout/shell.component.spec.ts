@@ -6,6 +6,8 @@ import { AuthService } from '../core/auth.service';
 import { BusinessService } from '../core/business.service';
 import { ToastService } from '../core/toast.service';
 import { OutboxService } from '../core/outbox.service';
+import { SiteCheckService } from '../core/site-check.service';
+import { DeviceService } from '../core/device.service';
 import { DEFAULT_SETTINGS, Shift } from '@shared/models';
 
 function setup(role: 'owner' | 'employee', shift: Partial<Shift> | null, queued = 0) {
@@ -13,6 +15,7 @@ function setup(role: 'owner' | 'employee', shift: Partial<Shift> | null, queued 
   const auth = {
     uid: signal('emp1'),
     isOwner: signal(role === 'owner'),
+    isKitchen: signal(false),
     businessId: signal(null),
     memberships: signal({}),
     displayName: signal('Sipho'),
@@ -28,6 +31,8 @@ function setup(role: 'owner' | 'employee', shift: Partial<Shift> | null, queued 
     imports: [ShellComponent],
     providers: [provideRouter([]), { provide: AuthService, useValue: auth }, { provide: BusinessService, useValue: biz },
       { provide: OutboxService, useValue: { count: signal(queued), online: signal(true) } },
+      { provide: SiteCheckService, useValue: { state: signal('not-needed') } },
+      { provide: DeviceService, useValue: { blocked: signal(false) } },
     ],
   });
   // owners would open live Firestore queries; the test only exercises sign-out

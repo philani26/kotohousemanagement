@@ -54,6 +54,8 @@ export class AuthService {
   /** true if this login owns at least one shop (may add more shops) */
   readonly ownsAShop = computed(() => Object.values(this.memberships()).includes('owner'));
   readonly isOwner = computed(() => this.role() === 'owner');
+  /** kitchen staff only use the order queue */
+  readonly isKitchen = computed(() => this.role() === 'kitchen');
   readonly displayName = computed(() => this.user()?.displayName || this.user()?.email || '');
 
   readonly ready: Promise<void>;

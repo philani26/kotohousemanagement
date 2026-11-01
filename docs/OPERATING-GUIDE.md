@@ -76,6 +76,30 @@ Orders turn orange after 10 minutes and red after 20, so nobody waits too long. 
 ### More than one shop
 **My shops** (or tap the shop name at the top) lists your kota houses. **Open another kota house** creates a new, empty shop with its own menu, stock, cash-ups, staff and reports. **Switch** changes which shop this device is working in; each phone remembers its own choice. Cashiers belong to one shop and never see the others. Add each branch's cashier from **Staff** while you're switched to that branch.
 
+### Work site (only working at the shop)
+**Settings › Work site**: stand in the shop, tap **📍 Use my current location**, check the spot on the map, set the allowed distance (100–200 m suits most shops), tick **Only allow staff to work at the shop** and **Save**.
+
+From then on cashiers and kitchen staff see a **Check in** screen after signing in. Their phone shares its location once. Inside the area they can work for the next 12 hours. Outside it they are blocked, and you get an alert with how far away they were. The server enforces this too: until a worker checks in, opening a shift, selling, refunds, stock changes and order tickets are all refused.
+
+- **You (the owner) are never blocked**, so you can monitor from anywhere.
+- **Only the distance and time are saved**, never the location. Tell your staff about the check before switching it on (POPIA).
+- **Phone GPS can be faked** with special apps. Treat this as a strong deterrent with an audit trail, not a guarantee. Staff's last check-in shows on **Staff**.
+
+### Shop devices and "off screen" time
+**Devices** (owner menu):
+- **Staff can only work on devices I approve**: staff signing in on any other phone see *"Waiting for the owner to approve this device"* with a 4-letter code, and you get an alert. Approve it (or **Block** it) in the list. Easiest set-up: sign in once as the owner on each shop phone or tablet and it is approved automatically. The server refuses every till action from an unapproved device.
+- **Device log**: each device's name (rename it, e.g. "Till phone"), who used it last, when, and its battery.
+- **Kota House off screen**: per worker per day, how long Kota House was not on screen during trading hours, with a timeline. You get an alert past your limit (default 60 min a day).
+
+What this can and can't see:
+- A web app **cannot see other apps** or which apps were used. "Off screen" means another app was open **or** the screen was off, so use it to start a conversation, together with sales and CCTV, not as proof.
+- **The device id lives in the browser.** Clearing the browser's data makes the phone show up as a new device that needs approval again.
+- **To control the phone itself** (lock it to Kota House only, see installed apps, locate or wipe it), put shop-owned phones in **kiosk mode** with an Android MDM such as Scalefusion, Hexnode or ManageEngine, or use Samsung Knox or Android screen pinning.
+- **Tell staff about these checks** and keep monitoring to shop-owned devices (POPIA).
+
+### Kitchen staff
+Give the person who prepares food a **Kitchen** login (**Staff** → Role: *Kitchen*). They only see the **Orders** board: they tap **Start preparing** and **✓ Ready**. They can't sell, see money, stock or sales, mark an order collected, or charge a WhatsApp order. Handing over and payment stay with the cashier. A kitchen tablet can stay signed in all day.
+
 ### Staff changes
 **Staff** → *Deactivate* stops a person immediately on every device. Their history stays. Use *New password* if a password leaks.
 

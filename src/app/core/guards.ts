@@ -33,5 +33,13 @@ export const homeRedirect: CanActivateFn = async () => {
   const auth = inject(AuthService);
   const router = inject(Router);
   await auth.ready;
-  return router.parseUrl(auth.isOwner() ? '/dashboard' : '/pos');
+  return router.parseUrl(auth.isOwner() ? '/dashboard' : auth.isKitchen() ? '/orders' : '/pos');
+};
+
+/** Kitchen staff only see the order queue; every other page sends them back to it. */
+export const kitchenGuard: CanActivateFn = async (_route, state) => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  await auth.ready;
+  return !auth.isKitchen() || state.url.startsWith('/orders') ? true : router.parseUrl('/orders');
 };

@@ -11,3 +11,6 @@ export { recordPurchase, recordStockMovement } from './stock';
 export { decideApproval } from './approvals';
 export { auditCatalog } from './triggers';
 export { monitorActivity } from './scheduled';
+export { whatsappWebhook, whatsappOrderStatus, linkWhatsapp } from './whatsapp';
+export { checkIn } from './site';
+export { deviceHeartbeat, setDevice, createDeviceInvite, pairDevice } from './devices';

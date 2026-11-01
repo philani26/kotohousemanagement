@@ -31,7 +31,8 @@
               }
             ],
             "styles": [
-              "src/styles.scss"
+              "src/styles.scss",
+              "src/theme.scss"
             ]
           },
           "configurations": {
@@ -86,7 +87,10 @@
               "buildTarget": "kotahouse:build:development,dev"
             }
           },
-          "defaultConfiguration": "development"
+          "defaultConfiguration": "development",
+          "options": {
+            "port": 4300
+          }
         },
         "test": {
           "builder": "@angular/build:unit-test"

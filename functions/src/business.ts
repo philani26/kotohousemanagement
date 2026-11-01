@@ -95,7 +95,7 @@ export const createEmployee = onCall<ApiRequest<'createEmployee'>, Promise<ApiRe
     const displayName = requireText(d.displayName, 'Name', 2, 60);
     const email = requireText(d.email, 'Email', 5, 120).toLowerCase();
     if (typeof d.password !== 'string' || d.password.length < 8) fail('invalid-argument', 'Password must be at least 8 characters');
-    const role: Role = d.role === 'owner' ? 'owner' : 'employee';
+    const role: Role = d.role === 'owner' ? 'owner' : d.role === 'kitchen' ? 'kitchen' : 'employee';
     const phone = optionalText(d.phone, 'Phone', 20);
 
     const user = await getAuth().createUser({ email, password: d.password, displayName });

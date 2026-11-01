@@ -18,12 +18,12 @@ npm install                     # app (if npm 10 fails with "edgesOut", use: npx
 npm --prefix functions install  # backend
 npm run build:functions
 npm run emulators               # terminal 1 – Auth, Firestore, Functions, Storage on localhost
-npm start                       # terminal 2 – http://localhost:4200
+npm start                       # terminal 2 – http://localhost:4300
 ```
 
 **Quickest on Windows:** `npm run local` opens the emulators and the app in two windows.
 
-The development build talks to the emulators only (`src/environments/environment.ts`). Open http://localhost:4200, choose **Create owner account**, set up the shop, then **Menu › Load example menu** to get started.
+The development build talks to the emulators only (`src/environments/environment.ts`). Open http://localhost:4300, choose **Create owner account**, set up the shop, then **Menu › Load example menu** to get started.
 
 Or fill the emulators with a demo shop and a morning of trading: `node functions/scripts/seed-demo.mjs`. It creates the logins `owner@demo.co.za` / `owner-pass-123` and `cashier@demo.co.za` / `cashier-pass-123`.
 
@@ -49,5 +49,6 @@ The emulator test suites use their own ports (`firebase.test.json`), so they can
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) – create the Firebase project and go live
 - [docs/OPERATING-GUIDE.md](docs/OPERATING-GUIDE.md) – daily routine for the cashier and the owner
 - [docs/SECURITY.md](docs/SECURITY.md) – security model, backups and recovery
+- [docs/WHATSAPP.md](docs/WHATSAPP.md) – customers order on WhatsApp and get “ready to collect” messages
 - [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md) – alerts, email and WhatsApp
 - [docs/CCTV.md](docs/CCTV.md) – camera setup and secure remote viewing

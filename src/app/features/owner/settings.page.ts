@@ -1,6 +1,9 @@
 import { Component, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { BusinessSettings } from '@shared/models';
+import { isValidPoint } from '@shared/geo';
+import { currentPosition } from '../../core/site-check.service';
 import { centsToRandString, parseRandToCents } from '@shared/money';
 import { BusinessService } from '../../core/business.service';
 import { ToastService } from '../../core/toast.service';
@@ -64,7 +67,7 @@ const lines = (t: string) => t.split('\n').map((x) => x.trim()).filter(Boolean);
 
 @Component({
   selector: 'app-settings',
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   template: `
     <div class="page-head"><h1>Settings</h1></div>
     @if (form(); as f) {
@@ -131,22 +134,115 @@ const lines = (t: string) => t.split('\n').map((x) => x.trim()).filter(Boolean);
         <button class="btn primary xl block" [disabled]="busy()">Save settings</button>
       </form>
     }
+
+    <div class="card" style="margin-top: 1rem">
+      <div class="row between">
+        <div><h2 style="margin: 0">💬 WhatsApp ordering</h2><span class="small muted">Your WhatsApp number, ordering on/off and messages</span></div>
+        <a class="btn primary" routerLink="/whatsapp">Open WhatsApp settings</a>
+      </div>
+    </div>
+
+    <form class="card" style="margin-top: 1rem" (ngSubmit)="saveSite()">
+      <div class="card-head">
+        <h2>📍 Work site (geofence)</h2>
+        <span class="badge" [class.ok]="biz.settings().geofence.enabled">{{ biz.settings().geofence.enabled ? 'On' : 'Off' }}</span>
+      </div>
+      <p class="small muted">
+        Cashiers and kitchen staff can only work after checking in from the shop. Their phone shares its location once at sign-in; only the
+        distance is kept. You (the owner) can always sign in from anywhere. Tell your staff about this check before you switch it on.
+      </p>
+      <div class="form-grid">
+        <label class="field"><span>Shop latitude</span><input name="lat" inputmode="decimal" [(ngModel)]="siteLat" placeholder="-26.2485" /></label>
+        <label class="field"><span>Shop longitude</span><input name="lng" inputmode="decimal" [(ngModel)]="siteLng" placeholder="27.8540" /></label>
+        <label class="field">
+          <span>Allowed distance (metres) <span class="hint">– 100–200 m suits most shops</span></span>
+          <input name="rad" type="number" min="50" max="2000" step="10" [(ngModel)]="siteRadius" />
+        </label>
+        <div class="field" style="justify-content: flex-end">
+          <button type="button" class="btn" [disabled]="locating()" (click)="useMyLocation()">
+            {{ locating() ? 'Finding location…' : '📍 Use my current location' }}
+          </button>
+        </div>
+      </div>
+      @if (siteMapUrl(); as url) {
+        <p class="small"><a [href]="url" target="_blank" rel="noopener">Check this spot on Google Maps ↗</a></p>
+      }
+      <label class="check"><input type="checkbox" name="geo" [(ngModel)]="siteEnabled" /> Only allow staff to work at the shop</label>
+      <button class="btn primary" style="margin-top: .5rem" [disabled]="siteBusy()">Save work site</button>
+    </form>
   `,
 })
 export class SettingsPage {
-  private readonly biz = inject(BusinessService);
+  protected readonly biz = inject(BusinessService);
   private readonly toast = inject(ToastService);
   protected readonly days = DAYS;
   protected readonly busy = signal(false);
   protected readonly form = signal<Form | null>(null);
+
+  // ---- work site (geofence) ----
+  protected siteLat = '';
+  protected siteLng = '';
+  protected siteRadius = 150;
+  protected siteEnabled = false;
+  protected readonly siteBusy = signal(false);
+  protected readonly locating = signal(false);
+  private siteLoaded = false;
+
+  protected siteMapUrl() {
+    const lat = Number(this.siteLat);
+    const lng = Number(this.siteLng);
+    return this.siteLat && this.siteLng && isValidPoint({ lat, lng }) ? `https://www.google.com/maps?q=${lat},${lng}` : null;
+  }
 
   constructor() {
     // Load once settings arrive; do not overwrite edits on later snapshots.
     effect(() => {
       const s = this.biz.settings();
       if (untracked(() => this.form()) === null && s.updatedAt) this.form.set(toForm(s));
+      if (!this.siteLoaded && s.updatedAt) {
+        this.siteLoaded = true;
+        this.siteLat = s.geofence.lat?.toString() ?? '';
+        this.siteLng = s.geofence.lng?.toString() ?? '';
+        this.siteRadius = s.geofence.radiusM;
+        this.siteEnabled = s.geofence.enabled;
+      }
     });
   }
+
+  /** Owner standing in the shop: fill in the shop's coordinates from this phone. */
+  async useMyLocation() {
+    this.locating.set(true);
+    try {
+      const pos = await currentPosition();
+      this.siteLat = pos.coords.latitude.toFixed(6);
+      this.siteLng = pos.coords.longitude.toFixed(6);
+      this.toast.ok(`Location found (accurate to about ${Math.round(pos.coords.accuracy)} m). Check it on the map, then Save.`);
+    } catch (err) {
+      this.toast.error(err);
+    } finally {
+      this.locating.set(false);
+    }
+  }
+
+  async saveSite() {
+    const lat = this.siteLat.trim() ? Number(this.siteLat) : null;
+    const lng = this.siteLng.trim() ? Number(this.siteLng) : null;
+    const hasPoint = lat !== null && lng !== null && isValidPoint({ lat, lng });
+    if ((lat !== null || lng !== null) && !hasPoint) return this.toast.error('Latitude and longitude are not valid – use "Use my current location"');
+    if (this.siteEnabled && !hasPoint) return this.toast.error('Set the shop location before switching the work-site check on');
+    const radiusM = Math.min(2000, Math.max(50, Math.round(Number(this.siteRadius) || 150)));
+    this.siteBusy.set(true);
+    try {
+      await this.biz.saveSettings({ geofence: { enabled: this.siteEnabled, lat: hasPoint ? lat : null, lng: hasPoint ? lng : null, radiusM } });
+      this.toast.ok(this.siteEnabled ? 'Work-site check is on – staff must check in at the shop' : 'Work site saved');
+    } catch (err) {
+      this.toast.error(err);
+    } finally {
+      this.siteBusy.set(false);
+    }
+  }
+
+
 
   toggleDay(f: Form, i: number) {
     f.tradingDays = f.tradingDays.includes(i) ? f.tradingDays.filter((d) => d !== i) : [...f.tradingDays, i].sort();

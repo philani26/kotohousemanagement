@@ -24,12 +24,15 @@ import { TsPipe } from '../../shared/pipes';
               <div class="main">
                 <div class="row">
                   <span class="title">{{ e.displayName }}</span>
-                  <span class="badge" [class.info]="e.role === 'owner'">{{ e.role === 'owner' ? 'Owner' : 'Cashier' }}</span>
+                  <span class="badge" [class.info]="e.role === 'owner'">{{ e.role === 'owner' ? 'Owner' : e.role === 'kitchen' ? 'Kitchen' : 'Cashier' }}</span>
                   @if (!e.active) {
                     <span class="badge bad">Deactivated</span>
                   }
                 </div>
                 <div class="tiny">{{ e.email }} {{ e.phone ? '· ' + e.phone : '' }} · since {{ e.createdAt | ts | date: 'd MMM yyyy' }}</div>
+                @if (e.siteCheckUntil && e.role !== 'owner') {
+                  <div class="tiny">📍 Last check-in: {{ e.siteCheckDistanceM ?? 0 }} m from the shop · valid until {{ e.siteCheckUntil | ts | date: 'd MMM HH:mm' }}</div>
+                }
               </div>
               @if (e.uid !== auth.uid()) {
                 <div class="stack" style="gap: .35rem">
@@ -55,6 +58,7 @@ import { TsPipe } from '../../shared/pipes';
           <span>Role</span>
           <select name="r" [(ngModel)]="role">
             <option value="employee">Cashier – sell, cash up, stock and expenses</option>
+            <option value="kitchen">Kitchen – sees orders only, marks them preparing / ready</option>
             <option value="owner">Owner – full access</option>
           </select>
         </label>
