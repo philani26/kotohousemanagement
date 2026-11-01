@@ -421,6 +421,10 @@ describe('a trading day', () => {
   });
 
   it('gives kitchen staff the order queue but no till or money functions', async () => {
+    // a name that looks like an email gets mistaken for the sign-in email
+    await expect(
+      owner.call('createEmployee', { email: `chef2-${run}@example.co.za`, password: 'chef-pass-123', displayName: 'chef@mail.com', role: 'kitchen' }),
+    ).rejects.toThrow(/can't be an email/);
     await owner.call('createEmployee', { email: `chef-${run}@example.co.za`, password: 'chef-pass-123', displayName: 'Chef Mandla', role: 'kitchen' });
     const chef = client('chef');
     await signInWithEmailAndPassword(chef.auth, `chef-${run}@example.co.za`, 'chef-pass-123');

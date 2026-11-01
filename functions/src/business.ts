@@ -87,12 +87,19 @@ export const setupBusiness = onCall<ApiRequest<'setupBusiness'>, Promise<ApiResp
   }),
 );
 
+/** A person's name, not their email: an email here gets mistaken for the sign-in email. */
+function personName(value: unknown): string {
+  const name = requireText(value, 'Name', 2, 60);
+  if (name.includes('@')) fail('invalid-argument', "Name can't be an email – type the person's name, and their email in the Email box");
+  return name;
+}
+
 /** Owner creates a staff login. Employees can never create users or change roles. */
 export const createEmployee = onCall<ApiRequest<'createEmployee'>, Promise<ApiResponse<'createEmployee'>>>((req) =>
   handle(async () => {
     const owner = await requireCaller(req, ['owner']);
     const d = req.data;
-    const displayName = requireText(d.displayName, 'Name', 2, 60);
+    const displayName = personName(d.displayName);
     const email = requireText(d.email, 'Email', 5, 120).toLowerCase();
     if (typeof d.password !== 'string' || d.password.length < 8) fail('invalid-argument', 'Password must be at least 8 characters');
     const role: Role = d.role === 'owner' ? 'owner' : d.role === 'kitchen' ? 'kitchen' : 'employee';
@@ -139,7 +146,7 @@ export const updateEmployee = onCall<ApiRequest<'updateEmployee'>, Promise<ApiRe
 
     const changes: Record<string, unknown> = {};
     if (typeof d.active === 'boolean') changes['active'] = d.active;
-    if (d.displayName !== undefined) changes['displayName'] = requireText(d.displayName, 'Name', 2, 60);
+    if (d.displayName !== undefined) changes['displayName'] = personName(d.displayName);
     if (d.phone !== undefined) changes['phone'] = optionalText(d.phone, 'Phone', 20) ?? '';
     if (d.password !== undefined && (typeof d.password !== 'string' || d.password.length < 8)) {
       fail('invalid-argument', 'Password must be at least 8 characters');

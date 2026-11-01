@@ -29,7 +29,8 @@ import { TsPipe } from '../../shared/pipes';
                     <span class="badge bad">Deactivated</span>
                   }
                 </div>
-                <div class="tiny">{{ e.email }} {{ e.phone ? '· ' + e.phone : '' }} · since {{ e.createdAt | ts | date: 'd MMM yyyy' }}</div>
+                <div class="small">Signs in with: <strong>{{ e.email }}</strong></div>
+                <div class="tiny">{{ e.phone ? e.phone + ' · ' : '' }}since {{ e.createdAt | ts | date: 'd MMM yyyy' }}</div>
                 @if (e.siteCheckUntil && e.role !== 'owner') {
                   <div class="tiny">📍 Last check-in: {{ e.siteCheckDistanceM ?? 0 }} m from the shop · valid until {{ e.siteCheckUntil | ts | date: 'd MMM HH:mm' }}</div>
                 }
@@ -38,6 +39,7 @@ import { TsPipe } from '../../shared/pipes';
                 <div class="stack" style="gap: .35rem">
                   <button class="btn small" (click)="toggle(e)">{{ e.active ? 'Deactivate' : 'Reactivate' }}</button>
                   <button class="btn small" (click)="resetFor.set(e)">New password</button>
+                  <button class="btn small ghost" (click)="rename(e)">Rename</button>
                 </div>
               }
             </div>
@@ -48,7 +50,7 @@ import { TsPipe } from '../../shared/pipes';
 
       <form class="card" (ngSubmit)="create()">
         <h2>Add a staff member</h2>
-        <label class="field"><span>Name</span><input name="n" [(ngModel)]="name" required /></label>
+        <label class="field"><span>Name</span><input name="n" [(ngModel)]="name" required placeholder="e.g. Lucky Mokoena" /></label>
         <label class="field"><span>Email (used to sign in)</span><input name="e" type="email" [(ngModel)]="email" required /></label>
         <label class="field"><span>Phone</span><input name="p" type="tel" [(ngModel)]="phone" /></label>
         <label class="field"><span>Temporary password <span class="hint">– at least 8 characters, give it to them in person</span></span>
@@ -78,6 +80,20 @@ import { TsPipe } from '../../shared/pipes';
         </form>
       </div>
     }
+
+    @if (renameFor(); as e) {
+      <div class="dialog-backdrop" (click)="renameFor.set(null)">
+        <form class="dialog" (click)="$event.stopPropagation()" (ngSubmit)="saveName(e)">
+          <h2>Rename {{ e.displayName }}</h2>
+          <label class="field"><span>Name</span><input name="nn" [(ngModel)]="newName" required maxlength="60" placeholder="e.g. Lucky Mokoena" /></label>
+          <p class="tiny">They still sign in with <strong>{{ e.email }}</strong>.</p>
+          <div class="row">
+            <button type="button" class="btn" (click)="renameFor.set(null)">Cancel</button>
+            <button class="btn primary" [disabled]="busy()">Save name</button>
+          </div>
+        </form>
+      </div>
+    }
   `,
 })
 export class EmployeesPage {
@@ -95,6 +111,8 @@ export class EmployeesPage {
   protected password = '';
   protected role: Role = 'employee';
   protected newPassword = '';
+  protected readonly renameFor = signal<Employee | null>(null);
+  protected newName = '';
 
   async create() {
     await this.run(async () => {
@@ -126,6 +144,19 @@ export class EmployeesPage {
       this.toast.ok('Password changed – they must sign in again');
       this.resetFor.set(null);
       this.newPassword = '';
+    });
+  }
+
+  rename(e: Employee) {
+    this.newName = e.displayName.includes('@') ? '' : e.displayName;
+    this.renameFor.set(e);
+  }
+
+  async saveName(e: Employee) {
+    await this.run(async () => {
+      await this.api.call('updateEmployee', { uid: e.uid, displayName: this.newName });
+      this.toast.ok('Name saved');
+      this.renameFor.set(null);
     });
   }
 
