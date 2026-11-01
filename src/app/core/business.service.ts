@@ -2,6 +2,7 @@ import { Injectable, computed, inject } from '@angular/core';
 import { CollectionReference, collection, doc, limit, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { DEFAULT_SETTINGS, BusinessSettings, COLLECTIONS, SETTINGS_DOC_ID, Shift } from '@shared/models';
 import { dayKey } from '@shared/domain';
+import { cleanLoyalty } from '@shared/loyalty';
 import { AuthService } from './auth.service';
 import { FirebaseService } from './firebase.service';
 import { liveDoc, liveQuery } from './live';
@@ -30,6 +31,7 @@ export class BusinessService {
       whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(s?.whatsapp ?? {}) },
       geofence: { ...DEFAULT_SETTINGS.geofence, ...(s?.geofence ?? {}) },
       devices: { ...DEFAULT_SETTINGS.devices, ...(s?.devices ?? {}) },
+      loyalty: cleanLoyalty(s?.loyalty),
     };
   });
 

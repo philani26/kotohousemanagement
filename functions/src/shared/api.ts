@@ -44,6 +44,8 @@ export interface Api {
       discountReason?: string;
       /** split payments: cashCents in cash, the rest by method (card/EFT) */
       payment: { method: PaymentMethod; amountReceivedCents?: Cents; cashCents?: Cents; reference?: string };
+      /** loyalty: the customer's mobile number, their name (first visit) and whether to use a full stamp card */
+      customer?: { phone: string; name?: string; redeemReward?: boolean };
       /** set by the offline queue: when the sale was rung up on the device */
       soldAtMillis?: number;
       /** total the cashier charged; flags price changes between an offline sale and its sync */

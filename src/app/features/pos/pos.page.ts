@@ -2,10 +2,11 @@ import { Component, computed, effect, inject, signal, untracked } from '@angular
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { orderBy, query, where } from 'firebase/firestore';
+import { getDoc, orderBy, query, where } from 'firebase/firestore';
 import { Ingredient, Order, PaymentMethod, Product, Recipe } from '@shared/models';
 import { discountPercent, inOrderQueue } from '@shared/domain';
 import { parseRandToCents } from '@shared/money';
+import { Customer, normalisePhone, rewardReady } from '@shared/loyalty';
 import { ApiError, ApiService } from '../../core/api.service';
 import { ConfirmService } from '../../core/confirm.service';
 import { OrdersService } from '../../core/orders.service';
@@ -151,10 +152,39 @@ const METHODS: { id: PaymentMethod; label: string; ico: string; hint: string }[]
         }
         <div class="sale-actions">
           <button class="chip-btn" [class.on]="showNote()" (click)="showNote.set(!showNote())">＋ Note</button>
+          <button class="chip-btn" [class.on]="showCustomer()" (click)="showCustomer.set(!showCustomer())">
+            {{ customer()?.name ? '👤 ' + customer()!.name : '＋ Customer' }}
+          </button>
           <button class="chip-btn" (click)="showSaved.set(true)" [disabled]="!saved().length">Saved ({{ saved().length }})</button>
         </div>
         @if (showNote()) {
           <input class="sale-note" [(ngModel)]="orderNote" name="note" maxlength="200" placeholder="Note for the kitchen, e.g. no atchar" />
+        }
+        @if (showCustomer()) {
+          <div class="discount-box" style="margin: .5rem 0">
+            <div class="row between"><strong class="small">Customer</strong>
+              <button class="icon-btn" (click)="removeCustomer()" aria-label="Remove customer">✕</button></div>
+            <form class="row" style="gap: .5rem; flex-wrap: nowrap" (ngSubmit)="findCustomer()">
+              <input type="tel" inputmode="tel" name="cphone" [ngModel]="customerText()" (ngModelChange)="customerText.set($event); customerFound.set(false)" placeholder="Cellphone, e.g. 082 123 4567" />
+              <button class="btn small" [disabled]="!customerPhone()">Find</button>
+            </form>
+            @if (customerFound()) {
+              @if (customer(); as c) {
+                <p class="small" style="margin: .4rem 0 0">
+                  <strong>{{ c.name || 'Customer' }}</strong> · {{ c.visits }} visit{{ c.visits === 1 ? '' : 's' }}
+                  @if (loyalty().enabled) { · ⭐ {{ c.stamps }}/{{ loyalty().stampsNeeded }} stamps }
+                </p>
+              } @else {
+                <input name="cname" [(ngModel)]="customerName" maxlength="60" placeholder="New customer – their name (optional)" style="margin-top: .4rem" />
+              }
+              @if (canRedeem()) {
+                <label class="check" style="margin-top: .35rem"><input type="checkbox" name="redeem" [ngModel]="useReward()" (ngModelChange)="useReward.set($event)" />
+                  Use free reward (up to {{ loyalty().rewardValueCents | zar }} off)</label>
+              } @else if (loyalty().enabled) {
+                <p class="tiny" style="margin: .25rem 0 0">{{ loyalty().stampsNeeded - (customer()?.stamps ?? 0) }} more stamp(s) to a reward. Sales of {{ loyalty().minSpendCents | zar }}+ earn a stamp.</p>
+              }
+            }
+          </div>
         }
 
         <div class="sale-lines">
@@ -204,6 +234,9 @@ const METHODS: { id: PaymentMethod; label: string; ico: string; hint: string }[]
               <button class="add-circle" (click)="showDiscount.set(true)" [disabled]="!cart().length" aria-label="Add discount">⊕</button>
             }
           </div>
+          @if (rewardCents()) {
+            <div class="sale-row"><span>⭐ Reward</span><span class="neg">−{{ rewardCents() | zar }}</span></div>
+          }
           <div class="sale-row total"><span>Total</span><span>{{ total() | zar }}</span></div>
           <div class="sale-buttons">
             <button class="btn save-btn" (click)="park()" [disabled]="!cart().length">Save</button>
@@ -448,7 +481,21 @@ export class PosPage {
   protected readonly discountCents = computed(() =>
     this.showDiscount() ? Math.min(parseRandToCents(this.discountText() || '0') ?? 0, this.subtotal()) : 0,
   );
-  protected readonly total = computed(() => this.subtotal() - this.discountCents());
+  // ---- loyalty customer ----
+  protected readonly showCustomer = signal(false);
+  protected readonly customerText = signal('');
+  protected customerName = '';
+  protected readonly customerFound = signal(false);
+  protected readonly customer = signal<Customer | null>(null);
+  protected readonly useReward = signal(false);
+  protected readonly customerPhone = computed(() => normalisePhone(this.customerText()));
+  protected readonly loyalty = computed(() => this.biz.settings().loyalty);
+  protected readonly canRedeem = computed(() => rewardReady(this.customer(), this.loyalty()));
+  protected readonly rewardCents = computed(() =>
+    this.useReward() && this.canRedeem() ? Math.min(this.loyalty().rewardValueCents, this.subtotal() - this.discountCents()) : 0,
+  );
+
+  protected readonly total = computed(() => this.subtotal() - this.discountCents() - this.rewardCents());
   protected readonly receivedCents = computed(() => parseRandToCents(this.receivedText()));
   protected readonly changeCents = computed(() => {
     const r = this.receivedCents();
@@ -494,6 +541,12 @@ export class PosPage {
     this.orderNote = ticket.note ?? '';
     this.showNote.set(!!ticket.note);
     this.linkedTicket.set(ticket);
+    if (ticket.customerPhone && normalisePhone(ticket.customerPhone)) {
+      this.customerText.set(ticket.customerPhone);
+      this.customerName = ticket.customerName ?? '';
+      this.showCustomer.set(true);
+      void this.findCustomer();
+    }
     if (ticket.totalCents !== undefined && ticket.totalCents !== this.subtotal()) {
       this.toast.info("Prices changed since the customer ordered – the till uses today's prices");
     }
@@ -550,7 +603,30 @@ export class PosPage {
     this.discountReason = '';
   }
 
+  async findCustomer() {
+    const phone = this.customerPhone();
+    if (!phone) return;
+    try {
+      const snap = await getDoc(this.biz.docRef('customers', phone));
+      this.customer.set(snap.exists() ? (snap.data() as Customer) : null);
+      this.customerFound.set(true);
+      this.useReward.set(false);
+    } catch (err) {
+      this.toast.error(err);
+    }
+  }
+
+  removeCustomer() {
+    this.showCustomer.set(false);
+    this.customerText.set('');
+    this.customerName = '';
+    this.customer.set(null);
+    this.customerFound.set(false);
+    this.useReward.set(false);
+  }
+
   clear() {
+    this.removeCustomer();
     this.cart.set([]);
     this.receivedText.set('');
     this.splitCash.set(null);
@@ -569,6 +645,7 @@ export class PosPage {
     if (discount > 0 && !this.auth.isOwner() && discountPercent(discount, this.subtotal()) > this.maxDiscount()) {
       return this.toast.error(`Discounts above ${this.maxDiscount()}% need the owner`);
     }
+    if (this.customerText().trim() && !this.customerPhone()) return this.toast.error("Check the customer's cellphone number");
     this.receivedText.set('');
     this.splitCash.set(null);
     this.reference = '';
@@ -633,6 +710,9 @@ export class PosPage {
         cashCents: this.splitCash() ?? undefined,
         reference: this.reference.trim() || undefined,
       },
+      customer: this.customerPhone()
+        ? { phone: this.customerPhone()!, name: this.customerName.trim() || undefined, redeemReward: this.rewardCents() > 0 || undefined }
+        : undefined,
       soldAtMillis: Date.now(),
       expectedTotalCents: this.total(),
     };
@@ -642,7 +722,7 @@ export class PosPage {
       cashier: this.auth.displayName(),
       lines: this.cart().map((l) => ({ name: l.product.name, quantity: l.quantity, lineTotalCents: l.product.priceCents * l.quantity })),
       subtotalCents: this.subtotal(),
-      discountCents: discount,
+      discountCents: discount + this.rewardCents(),
       totalCents: this.total(),
       method: this.method(),
       cashCents: request.payment.cashCents,

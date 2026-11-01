@@ -1,6 +1,7 @@
 import { Cents } from './money';
 import { DEFAULT_GEOFENCE, GeofenceSettings } from './geo';
 import { DEFAULT_DEVICE_SETTINGS, DeviceSettings } from './devices';
+import { DEFAULT_LOYALTY, LoyaltySettings } from './loyalty';
 
 /**
  * Firestore data model. Every business-owned collection lives under
@@ -64,6 +65,7 @@ export const COLLECTIONS = {
   devices: 'devices',
   activity: 'activity',
   timeEntries: 'timeEntries',
+  customers: 'customers',
   deviceInvites: 'deviceInvites',
 } as const;
 
@@ -271,6 +273,11 @@ export interface Sale {
   costCents: Cents;
   payment: SalePayment;
   status: SaleStatus;
+  /** loyalty customer (27XXXXXXXXX) */
+  customerPhone?: string;
+  customerName?: string;
+  /** stamp-card reward taken off this sale (included in discountCents) */
+  rewardCents?: Cents;
   /** when the sale actually happened; differs from createdAt for sales synced after being offline */
   soldAt?: TimestampLike;
   offline?: boolean;
@@ -548,6 +555,8 @@ export interface BusinessSettings {
   geofence: GeofenceSettings;
   /** approved shop devices and away-from-app alerts */
   devices: DeviceSettings;
+  /** stamp card for regular customers */
+  loyalty: LoyaltySettings;
   /** customers order on WhatsApp; needs a WhatsApp Business Platform number (docs/WHATSAPP.md) */
   whatsapp: {
     ordering: boolean;
@@ -642,5 +651,6 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   whatsapp: { ordering: false, phoneNumberId: '', displayNumber: '' },
   geofence: DEFAULT_GEOFENCE,
   devices: DEFAULT_DEVICE_SETTINGS,
+  loyalty: DEFAULT_LOYALTY,
   cctv: { provider: '', viewerUrl: '', androidAppUrl: '', iosAppUrl: '', notes: '' },
 };

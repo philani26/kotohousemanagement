@@ -12,6 +12,7 @@ import { setGlobalOptions } from 'firebase-functions/v2';
 import { CallableRequest, HttpsError } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions';
 import { DomainError, dayKey } from './shared/domain';
+import { cleanLoyalty } from './shared/loyalty';
 import {
   AppNotification,
   BusinessSettings,
@@ -68,6 +69,7 @@ export function withSettingsDefaults(data: Partial<BusinessSettings> | undefined
     whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(data?.whatsapp ?? {}) },
     geofence: { ...DEFAULT_SETTINGS.geofence, ...(data?.geofence ?? {}) },
     devices: { ...DEFAULT_SETTINGS.devices, ...(data?.devices ?? {}) },
+    loyalty: cleanLoyalty(data?.loyalty),
   };
 }
 

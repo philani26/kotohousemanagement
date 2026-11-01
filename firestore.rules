@@ -232,6 +232,13 @@ service cloud.firestore {
         allow read: if isOwner(b);
         allow write: if false;
       }
+      // Loyalty customers: written by functions. Cashiers look up one number at the till;
+      // only the owner can list everyone (phone numbers are personal information, POPIA).
+      match /customers/{phone} {
+        allow get: if isStaff(b);
+        allow list: if isOwner(b);
+        allow write: if false;
+      }
       // Time clock: written by functions; staff read their own entries, the owner reads all.
       match /timeEntries/{id} {
         allow read: if isOwner(b) || (canSeeShop(b) && resource.data.uid == request.auth.uid);

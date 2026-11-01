@@ -17,6 +17,9 @@
 4. **No internet (load-shedding, no data)?** Keep selling. Each sale is saved on the phone, and an orange **Offline** label shows how many are waiting. They send by themselves when the internet is back, and are never recorded twice. Don't clear the browser or sign out until they've sent. You can't close the shift until they're through.
 4. **Discounts** need a reason, and you can only give up to the limit the owner set.
 
+### Regular customers and the stamp card
+Tap **＋ Customer** on the sale, type their cellphone number and tap **Find**. New customers can give their name. Sales over the owner's minimum earn a stamp. When the card is full, tick **Use free reward** and the reward comes off the total. Tell the customer their number is kept for the stamp card.
+
 ### The order queue
 Every paid order appears on **Orders** in the order customers paid ("Order 1", "Order 2"…), with any note for the kitchen (e.g. *no atchar*).
 1. Tap **Start preparing** when you begin the kota.
@@ -103,6 +106,9 @@ What this can and can't see:
 
 ### Kitchen staff
 Give the person who prepares food a **Kitchen** login (**Staff** → Role: *Kitchen*). They only see the **Orders** board: they tap **Start preparing** and **✓ Ready**. They can't sell, see money, stock or sales, mark an order collected, or charge a WhatsApp order. Handing over and payment stay with the cashier. A kitchen tablet can stay signed in all day.
+
+### Customers and the stamp card
+**Customers** (owner menu): switch the stamp card on and choose how many stamps earn a reward, how much a sale must be to earn a stamp and how much the reward takes off (e.g. 9 stamps, R30, R40 = "buy 9 kotas, the 10th is free"). The list shows every customer's visits, spend, stamps and rewards used, with **⬇ CSV**. The server checks the stamps, so a cashier can't give a reward that wasn't earned. Rewards count as discounts in reports. Cashiers can look up one number at the till but can't see the list.
 
 ### Staff hours (for wages)
 **Hours** shows each worker's hours, days and clock-ins for the week (use ← → for other weeks). **⬇ CSV** downloads them for wages. A clock-in left open for more than 14 hours shows **Forgot to clock out?**: tap **Clock out**, set the real time and give a reason. Corrections are kept in the Activity log.

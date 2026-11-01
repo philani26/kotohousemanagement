@@ -563,6 +563,38 @@ describe('a trading day', () => {
     await setDoc(doc(owner.db, bpath('businessSettings', 'main')), { devices: { lockToApproved: false, awayAlertMinutes: 60 }, ...stamp(ownerUid) }, { merge: true });
   });
 
+  it('keeps customers and a stamp card; the server decides the reward', async () => {
+    const inB2 = { businessId: b2 } as Record<string, unknown>;
+    await setDoc(
+      doc(owner.db, 'businesses', b2, 'businessSettings', 'main'),
+      { loyalty: { enabled: true, stampsNeeded: 2, minSpendCents: 3000, rewardValueCents: 5000 }, ...stamp(ownerUid) },
+      { merge: true },
+    );
+    const prod = doc(collection(owner.db, 'businesses', b2, 'products'));
+    await setDoc(prod, { id: prod.id, name: 'Loyal Kota', category: 'kota', priceCents: 4000, active: true, sortOrder: 3, ...stamp(ownerUid) });
+    const items = [{ productId: prod.id, quantity: 1 }];
+    const sell = (n: string, customer: Record<string, unknown>) =>
+      owner.call('recordSale', { saleId: `loyal${n}${run}abcdefgh`, items, payment: { method: 'card' }, customer, ...inB2 } as never);
+
+    await expect(sell('x', { phone: '12345' })).rejects.toThrow(/cellphone number/);
+    await sell('1', { phone: '082 555 0001', name: 'Lerato' });
+    await expect(sell('2', { phone: '0825550001', redeemReward: true })).rejects.toThrow(/isn't full yet/);
+    await sell('3', { phone: '+27 82 555 0001' });
+    const card = doc(owner.db, 'businesses', b2, 'customers', '27825550001');
+    expect((await getDoc(card)).data()).toMatchObject({ name: 'Lerato', visits: 2, stamps: 2, spentCents: 8000 });
+
+    // full card: up to R50 off a R40 kota = free; no stamp for a free sale
+    const free = await sell('4', { phone: '0825550001', redeemReward: true });
+    expect(free.totalCents).toBe(0);
+    const sale = (await getDoc(doc(owner.db, 'businesses', b2, 'sales', `loyal4${run}abcdefgh`))).data() as Sale;
+    expect(sale).toMatchObject({ rewardCents: 4000, discountCents: 4000, customerPhone: '27825550001', customerName: 'Lerato' });
+    expect((await getDoc(card)).data()).toMatchObject({ visits: 3, stamps: 0, rewardsRedeemed: 1 });
+
+    // cashiers look up one number, only the owner lists everyone
+    await getDoc(doc(cashier.db, bpath('customers', '27825550001')));
+    await expect(getDocs(collection(cashier.db, bpath('customers')))).rejects.toThrow();
+  });
+
   it('keeps a time clock: staff clock in and out, the owner fixes a forgotten clock-out', async () => {
     const first = await cashier.call('clockIn', {});
     expect(first.alreadyIn).toBe(false);

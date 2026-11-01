@@ -1,6 +1,7 @@
 import { onCall } from 'firebase-functions/v2/https';
 import { ApiRequest, ApiResponse } from './shared/api';
 import { DomainError, clampStockChange, discountPercent, ingredientUsage, isLowStock, localHour, priceCart, requireText, resolveSoldAt, settlePayment, paymentParts, paymentLabel, cashPartCents } from './shared/domain';
+import { Customer, loyaltyOutcome, normalisePhone } from './shared/loyalty';
 import { formatZar } from './shared/money';
 import { CashSession, Ingredient, PAYMENT_METHODS, Product, Recipe, Sale } from './shared/models';
 import {
@@ -39,6 +40,9 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
     if (!d.payment || !PAYMENT_METHODS.includes(d.payment.method)) fail('invalid-argument', 'Choose a payment method');
     const reference = optionalText(d.payment.reference, 'Payment reference', 60);
     const discountReason = optionalText(d.discountReason, 'Discount reason', 120);
+    const customerPhone = d.customer ? normalisePhone(d.customer.phone) : null;
+    if (d.customer && !customerPhone) fail('invalid-argument', "Enter the customer's cellphone number, e.g. 082 123 4567");
+    const customerName = d.customer ? optionalText(d.customer.name, 'Customer name', 60) : undefined;
     // Sales queued on the device while offline keep the time they were rung up.
     const soldAt = resolveSoldAt(d.soldAtMillis, Date.now());
     const b = caller.businessId;
@@ -71,16 +75,25 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
 
       const settings = await readSettings(b, tx);
       const business = await tx.get(bizRef(b));
+      const customerRef = customerPhone ? col(b, 'customers').doc(customerPhone) : null;
+      const customer = customerRef ? (((await tx.get(customerRef)).data() as Customer | undefined) ?? null) : null;
 
       // ---- business rules ----
-      const priced = priceCart(items, products, d.discountCents ?? 0);
-      const pct = discountPercent(priced.discountCents, priced.subtotalCents);
-      if (priced.discountCents > 0) {
+      const cart = priceCart(items, products, d.discountCents ?? 0);
+      const pct = discountPercent(cart.discountCents, cart.subtotalCents);
+      if (cart.discountCents > 0) {
         if (!discountReason) throw new DomainError('Give a reason for the discount');
         if (caller.role === 'employee' && pct > settings.maxEmployeeDiscountPercent) {
           fail('permission-denied', `Discounts above ${settings.maxEmployeeDiscountPercent}% need the owner`);
         }
       }
+      // Stamp-card reward on top of the cashier's discount (not limited by the cashier's discount limit).
+      const loyalty = loyaltyOutcome(customer, settings.loyalty, cart.totalCents, !!d.customer?.redeemReward);
+      // Offline sales were already charged: record them anyway (the total-changed alert flags the difference).
+      if (d.customer?.redeemReward && loyalty.rewardCents === 0 && !soldAt.offline) {
+        throw new DomainError(settings.loyalty.enabled ? "This customer's stamp card isn't full yet" : 'The stamp card is switched off');
+      }
+      const priced = { ...cart, discountCents: cart.discountCents + loyalty.rewardCents, totalCents: cart.totalCents - loyalty.rewardCents };
       const payment = settlePayment(d.payment.method, priced.totalCents, d.payment.amountReceivedCents, d.payment.cashCents);
       const parts = paymentParts(payment, priced.totalCents);
       const paidBy = paymentLabel(payment);
@@ -102,6 +115,8 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
         discountCents: priced.discountCents,
         ...(discountReason ? { discountReason } : {}),
         totalCents: priced.totalCents,
+        ...(customerPhone ? { customerPhone, ...(customerName || customer?.name ? { customerName: customerName || customer?.name } : {}) } : {}),
+        ...(loyalty.rewardCents ? { rewardCents: loyalty.rewardCents } : {}),
         costCents,
         payment: { ...payment, ...(reference ? { reference } : {}), verified: payment.method === 'cash' },
         status: 'completed',
@@ -110,6 +125,18 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
       };
       tx.set(saleRef, { ...sale, soldAt: Timestamp.fromDate(now), createdAt: FieldValue.serverTimestamp() });
       tx.update(bizRef(b), { receiptCounter: receiptNo });
+      if (customerRef && customerPhone) {
+        tx.set(customerRef, {
+          phone: customerPhone,
+          name: customerName || customer?.name || '',
+          visits: (customer?.visits ?? 0) + 1,
+          spentCents: (customer?.spentCents ?? 0) + priced.totalCents,
+          stamps: loyalty.stampsAfter,
+          rewardsRedeemed: (customer?.rewardsRedeemed ?? 0) + (loyalty.rewardCents ? 1 : 0),
+          firstVisitMillis: customer?.firstVisitMillis ?? now.getTime(),
+          lastVisitMillis: now.getTime(),
+        } satisfies Customer);
+      }
 
       for (const u of usage) {
         const ingredient = ingredients.get(u.ingredientId);
@@ -165,19 +192,22 @@ export const recordSale = onCall<ApiRequest<'recordSale'>, Promise<ApiResponse<'
         hourly: { [String(localHour(now, settings.timezone)).padStart(2, '0')]: inc(priced.totalCents) },
       });
 
-      if (priced.discountCents > 0) {
-        audit(tx, b, caller, 'sale.discounted', 'sales', d.saleId, { discountCents: priced.discountCents, percent: Math.round(pct), reason: discountReason });
+      if (loyalty.rewardCents) {
+        audit(tx, b, caller, 'loyalty.redeemed', 'sales', d.saleId, { customer: customerPhone, rewardCents: loyalty.rewardCents });
+      }
+      if (cart.discountCents > 0) {
+        audit(tx, b, caller, 'sale.discounted', 'sales', d.saleId, { discountCents: cart.discountCents, percent: Math.round(pct), reason: discountReason });
         if (pct >= settings.thresholds.discountAlertPercent) {
           notify(tx, b, settings, {
             type: 'largeDiscount',
             severity: 'warning',
             title: `Discount of ${Math.round(pct)}% given`,
-            message: `${caller.name} discounted receipt #${receiptNo} by ${formatZar(priced.discountCents)}: ${discountReason}`,
+            message: `${caller.name} discounted receipt #${receiptNo} by ${formatZar(cart.discountCents)}: ${discountReason}`,
             details: [
               { label: 'Receipt', value: `#${receiptNo} at ${localTime(now, settings)}` },
               { label: 'Items', value: itemsText(priced.lines) },
-              { label: 'Full price', value: formatZar(priced.subtotalCents) },
-              { label: 'Discount', value: `${formatZar(priced.discountCents)} (${Math.round(pct)}%)`, tone: 'bad' },
+              { label: 'Full price', value: formatZar(cart.subtotalCents) },
+              { label: 'Discount', value: `${formatZar(cart.discountCents)} (${Math.round(pct)}%)`, tone: 'bad' },
               { label: 'Customer paid', value: `${formatZar(priced.totalCents)} by ${paidBy}` },
               { label: 'Reason given', value: discountReason ?? '' },
             ],

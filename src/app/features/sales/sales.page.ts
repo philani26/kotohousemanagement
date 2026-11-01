@@ -92,6 +92,9 @@ import { TsPipe, ZarPipe } from '../../shared/pipes';
                   <div class="tiny">📝 {{ o.note }}</div>
                 }
               }
+              @if (s.customerPhone) {
+                <div class="tiny">👤 {{ s.customerName || 'Customer' }}{{ s.rewardCents ? ' · ⭐ reward −' + (s.rewardCents | zar) : '' }}</div>
+              }
               @if (s.payment.cashCents) {
                 <div class="tiny">Cash {{ s.payment.cashCents | zar }} + {{ s.payment.method | uppercase }} {{ s.totalCents - s.payment.cashCents | zar }}</div>
               }
