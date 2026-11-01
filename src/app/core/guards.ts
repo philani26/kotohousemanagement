@@ -41,5 +41,5 @@ export const kitchenGuard: CanActivateFn = async (_route, state) => {
   const auth = inject(AuthService);
   const router = inject(Router);
   await auth.ready;
-  return !auth.isKitchen() || state.url.startsWith('/orders') ? true : router.parseUrl('/orders');
+  return !auth.isKitchen() || state.url.startsWith('/orders') || state.url.startsWith('/hours') ? true : router.parseUrl('/orders');
 };

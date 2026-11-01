@@ -63,6 +63,7 @@ export const COLLECTIONS = {
   whatsappMessages: 'whatsappMessages',
   devices: 'devices',
   activity: 'activity',
+  timeEntries: 'timeEntries',
   deviceInvites: 'deviceInvites',
 } as const;
 

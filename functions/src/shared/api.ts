@@ -101,6 +101,9 @@ export interface Api {
   ];
   createDeviceInvite: [{ label: string }, { code: string; expiresAtMillis: number }];
   pairDevice: [{ code: string; deviceId: string; userAgent: string }, { status: DeviceStatus; label: string }];
+  clockIn: [Record<string, never>, { entryId: string; clockInMillis: number; alreadyIn: boolean }];
+  clockOut: [Record<string, never>, { minutes: number }];
+  fixTimeEntry: [{ entryId: string; clockOutMillis: number; reason: string }, { ok: true }];
   setDevice: [{ deviceId: string; status?: DeviceStatus; label?: string }, { ok: true }];
   checkIn: [
     { lat: number; lng: number; accuracyM: number },

@@ -25,6 +25,9 @@ Every paid order appears on **Orders** in the order customers paid ("Order 1", "
 
 Orders turn orange after 10 minutes and red after 20, so nobody waits too long. Tapped the wrong button? Use **Undo**. The Orders tab shows how many orders are waiting, and the queue keeps working with no internet.
 
+### Clocking in and out
+**Hours** → **Clock in** when you start work and **Clock out** when you leave. Kitchen staff do the same. You can only clock in at the shop on an approved device (if the owner switched those checks on). Hours shows your total for the week.
+
 ### Mistakes and refunds
 - You can't delete or change a sale. Go to **Sales** → **Refund** → give the reason. The owner approves it. Only hand money back once it's approved.
 
@@ -100,6 +103,9 @@ What this can and can't see:
 
 ### Kitchen staff
 Give the person who prepares food a **Kitchen** login (**Staff** → Role: *Kitchen*). They only see the **Orders** board: they tap **Start preparing** and **✓ Ready**. They can't sell, see money, stock or sales, mark an order collected, or charge a WhatsApp order. Handing over and payment stay with the cashier. A kitchen tablet can stay signed in all day.
+
+### Staff hours (for wages)
+**Hours** shows each worker's hours, days and clock-ins for the week (use ← → for other weeks). **⬇ CSV** downloads them for wages. A clock-in left open for more than 14 hours shows **Forgot to clock out?**: tap **Clock out**, set the real time and give a reason. Corrections are kept in the Activity log.
 
 ### Staff changes
 **Staff** → *Deactivate* stops a person immediately on every device. Their history stays. Use *New password* if a password leaks.

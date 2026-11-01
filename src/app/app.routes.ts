@@ -18,6 +18,7 @@ export const routes: Routes = [
       { path: 'shift', title: 'Shift', loadComponent: () => import('./features/shift/shift.page').then((m) => m.ShiftPage) },
       { path: 'sales', title: 'Sales', loadComponent: () => import('./features/sales/sales.page').then((m) => m.SalesPage) },
       { path: 'expenses', title: 'Expenses', loadComponent: () => import('./features/expenses/expenses.page').then((m) => m.ExpensesPage) },
+      { path: 'hours', title: 'Hours', loadComponent: () => import('./features/hours/hours.page').then((m) => m.HoursPage) },
       { path: 'stock', title: 'Stock', loadComponent: () => import('./features/stock/stock.page').then((m) => m.StockPage) },
       // Owner only (also enforced by security rules and functions)
       {

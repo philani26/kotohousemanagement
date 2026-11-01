@@ -232,6 +232,11 @@ service cloud.firestore {
         allow read: if isOwner(b);
         allow write: if false;
       }
+      // Time clock: written by functions; staff read their own entries, the owner reads all.
+      match /timeEntries/{id} {
+        allow read: if isOwner(b) || (canSeeShop(b) && resource.data.uid == request.auth.uid);
+        allow write: if false;
+      }
       match /deviceInvites/{code} {
         allow read: if isOwner(b);
         allow write: if false;

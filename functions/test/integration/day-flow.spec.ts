@@ -563,6 +563,30 @@ describe('a trading day', () => {
     await setDoc(doc(owner.db, bpath('businessSettings', 'main')), { devices: { lockToApproved: false, awayAlertMinutes: 60 }, ...stamp(ownerUid) }, { merge: true });
   });
 
+  it('keeps a time clock: staff clock in and out, the owner fixes a forgotten clock-out', async () => {
+    const first = await cashier.call('clockIn', {});
+    expect(first.alreadyIn).toBe(false);
+    expect((await cashier.call('clockIn', {})).alreadyIn).toBe(true);
+    const out = await cashier.call('clockOut', {});
+    expect(out.minutes).toBeGreaterThanOrEqual(0);
+    await expect(cashier.call('clockOut', {})).rejects.toThrow(/not clocked in/);
+    await expect(owner.call('clockIn', {})).rejects.toThrow(/not allowed/);
+
+    // a forgotten clock-out: the owner sets it, with a reason, and it is audited
+    const second = await cashier.call('clockIn', {});
+    await expect(cashier.call('fixTimeEntry', { entryId: second.entryId, clockOutMillis: Date.now(), reason: 'left early' })).rejects.toThrow(/not allowed/);
+    await expect(owner.call('fixTimeEntry', { entryId: second.entryId, clockOutMillis: second.clockInMillis - 1000, reason: 'oops' })).rejects.toThrow(/after clock-in/);
+    await owner.call('fixTimeEntry', { entryId: second.entryId, clockOutMillis: Date.now(), reason: 'Forgot to clock out' });
+    const fixed = (await getDoc(doc(owner.db, bpath('timeEntries', second.entryId)))).data()!;
+    expect(fixed['clockOutMillis']).toBeGreaterThan(second.clockInMillis);
+    expect(fixed['fixReason']).toBe('Forgot to clock out');
+
+    // staff only see their own entries
+    const mine = await getDocs(query(collection(cashier.db, bpath('timeEntries')), where('uid', '==', cashier.auth.currentUser!.uid)));
+    expect(mine.size).toBe(2);
+    await expect(getDocs(collection(cashier.db, bpath('timeEntries')))).rejects.toThrow();
+  });
+
   it('prevents a deactivated cashier from trading', async () => {
     const emp = await getDocs(query(collection(owner.db, bpath('employees')), where('role', '==', 'employee')));
     await owner.call('updateEmployee', { uid: emp.docs[0].id, active: false });

@@ -134,7 +134,7 @@ export class ShellComponent {
   protected readonly shopCount = computed(() => Object.keys(this.auth.memberships()).length);
 
   protected readonly allItems = computed<NavItem[]>(() =>
-    this.auth.isOwner() ? [...OWNER_NAV, ...STAFF_NAV] : this.auth.isKitchen() ? STAFF_NAV.filter((i) => i.path === '/orders') : STAFF_NAV,
+    this.auth.isOwner() ? [...OWNER_NAV, ...STAFF_NAV] : this.auth.isKitchen() ? STAFF_NAV.filter((i) => i.path === '/orders' || i.path === '/hours') : STAFF_NAV,
   );
   protected readonly groups = computed(() => {
     const items = this.allItems();

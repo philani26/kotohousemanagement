@@ -13,4 +13,5 @@ export { auditCatalog } from './triggers';
 export { monitorActivity } from './scheduled';
 export { whatsappWebhook, whatsappOrderStatus, linkWhatsapp } from './whatsapp';
 export { checkIn } from './site';
+export { clockIn, clockOut, fixTimeEntry } from './hours';
 export { deviceHeartbeat, setDevice, createDeviceInvite, pairDevice } from './devices';
