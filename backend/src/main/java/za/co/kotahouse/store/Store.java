@@ -217,6 +217,10 @@ public class Store {
         .param("c", c).param("id", id).param("d", write(resolve(data))).update();
   }
 
+  public void deleteGlobal(String c, String id) {
+    db.sql("delete from global_docs where collection = :c and id = :id").param("c", c).param("id", id).update();
+  }
+
   // ---------------------------------------------------------------- helpers
 
   /** Where a collection's records come from: the docs table, or the staff view over memberships. */

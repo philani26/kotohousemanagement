@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
+@org.springframework.scheduling.annotation.EnableScheduling
 public class KotaHouseApplication {
   public static void main(String[] args) {
     SpringApplication.run(KotaHouseApplication.class, args);

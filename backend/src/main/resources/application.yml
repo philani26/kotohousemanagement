@@ -55,3 +55,15 @@ kotahouse:
     salt-separator: ${FIREBASE_HASH_SALT_SEPARATOR:Bw==}
     rounds: ${FIREBASE_HASH_ROUNDS:8}
     mem-cost: ${FIREBASE_HASH_MEM_COST:14}
+  # The API's own public address, e.g. https://api.kotahouse.co.za – used for the Yoco webhook
+  api-url: ${API_URL:http://localhost:8081}
+  whatsapp:
+    # Without a token, outgoing messages are only logged (dry-run)
+    token: ${WHATSAPP_TOKEN:}
+    app-secret: ${WHATSAPP_APP_SECRET:}
+    verify-token: ${WHATSAPP_VERIFY_TOKEN:}
+    # Accept unsigned webhook calls: local development only, never in production
+    allow-unsigned: ${WHATSAPP_ALLOW_UNSIGNED:false}
+  yoco:
+    # Test mode without calling Yoco: fake checkout links and a fixed webhook secret. Local development and tests only.
+    dry-run: ${YOCO_DRY_RUN:false}

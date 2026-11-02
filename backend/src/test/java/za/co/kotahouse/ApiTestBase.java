@@ -24,7 +24,11 @@ import za.co.kotahouse.auth.Mailer;
     properties = {
         // Firebase's published scrypt example parameters, for the imported-password test
         "kotahouse.firebase.signer-key=jxspr8Ki0RYycVU8zykbdLGjFQ3McFUH0uiiTvC8pVMXAn210wjLNmdZJzxUECKbm0QsEmYUSDzZvpjeJ9WmXA==",
-        "kotahouse.jwt-secret=dGVzdC1vbmx5LWtleS10ZXN0LW9ubHkta2V5LTMyYnl0ZXMhIQ=="
+        "kotahouse.jwt-secret=dGVzdC1vbmx5LWtleS10ZXN0LW9ubHkta2V5LTMyYnl0ZXMhIQ==",
+        // no calls to Yoco or Meta from tests; the scheduled check is run by its own test
+        "kotahouse.yoco.dry-run=true",
+        "kotahouse.whatsapp.allow-unsigned=true",
+        "kotahouse.monitor-initial-delay=24h"
     })
 @Import(ApiTestBase.TestMail.class)
 public abstract class ApiTestBase {

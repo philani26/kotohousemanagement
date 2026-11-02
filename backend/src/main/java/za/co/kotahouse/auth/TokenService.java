@@ -130,6 +130,17 @@ public class TokenService {
     return token;
   }
 
+  /** HMAC of a purpose and some data, for short signed links (e.g. viewing a receipt photo). */
+  public String sign(String purpose, String data) {
+    try {
+      javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+      mac.init(key);
+      return base64Url(mac.doFinal((purpose + "|" + data).getBytes(StandardCharsets.UTF_8)));
+    } catch (java.security.GeneralSecurityException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
   public static String randomToken() {
     return base64Url(randomBytes(32));
   }
