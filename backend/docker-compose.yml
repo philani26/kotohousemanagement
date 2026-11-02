@@ -30,6 +30,10 @@ services:
       # local only – never reuse in a real environment
       JWT_SECRET: bG9jYWwtZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0ZXMh
       CORS_ORIGINS: http://localhost:4200
+    # WhatsApp and other secrets from backend/.env (optional, git-ignored)
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "${BACKEND_PORT:-18081}:8080"   # 8080 and 8081 are often taken (Jenkins, XAMPP, WSL)
 

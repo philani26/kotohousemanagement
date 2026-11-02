@@ -55,3 +55,6 @@ firebase-export-*/
 
 # Java backend
 /backend/target/
+
+# Local backend secrets (WhatsApp, Yoco…) – never commit
+/backend/.env
