@@ -40,7 +40,7 @@ public class SecurityConfig {
   }
 
   @Bean
-  CorsConfigurationSource cors(AppProperties props) {
+  CorsConfigurationSource corsConfigurationSource(AppProperties props) {
     CorsConfiguration c = new CorsConfiguration();
     c.setAllowedOrigins(props.corsOriginList());
     c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));

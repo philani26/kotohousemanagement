@@ -16,8 +16,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.web.client.RestClient;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import za.co.kotahouse.auth.Mailer;
 
@@ -28,12 +26,15 @@ import za.co.kotahouse.auth.Mailer;
         "kotahouse.firebase.signer-key=jxspr8Ki0RYycVU8zykbdLGjFQ3McFUH0uiiTvC8pVMXAn210wjLNmdZJzxUECKbm0QsEmYUSDzZvpjeJ9WmXA==",
         "kotahouse.jwt-secret=dGVzdC1vbmx5LWtleS10ZXN0LW9ubHkta2V5LTMyYnl0ZXMhIQ=="
     })
-@Testcontainers
 @Import(ApiTestBase.TestMail.class)
 public abstract class ApiTestBase {
-  @Container
+  /** One PostgreSQL for the whole test run: Spring re-uses the app between test classes, so the database must outlive each class. */
   @ServiceConnection
   static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
+
+  static {
+    POSTGRES.start();
+  }
 
   @LocalServerPort
   int port;

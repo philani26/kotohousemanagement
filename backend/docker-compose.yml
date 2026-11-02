@@ -1,6 +1,6 @@
 # Local development: PostgreSQL (and optionally the backend itself).
 #   docker compose up -d db          # just the database, run the app from your IDE / mvn spring-boot:run
-#   docker compose up --build        # database + backend on http://localhost:8080
+#   docker compose up --build        # database + backend on http://localhost:8081
 services:
   db:
     image: postgres:17-alpine
@@ -31,7 +31,7 @@ services:
       JWT_SECRET: bG9jYWwtZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0ZXMh
       CORS_ORIGINS: http://localhost:4200
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8081}:8080"   # 8080 is often taken (e.g. Jenkins)
 
 volumes:
   pgdata:
