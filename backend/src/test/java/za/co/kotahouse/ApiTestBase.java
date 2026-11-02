@@ -48,7 +48,7 @@ public abstract class ApiTestBase {
   protected RestClient http;
 
   @BeforeEach
-  void client() {
+  protected void client() {
     http = RestClient.builder().baseUrl("http://localhost:" + port).build();
     mail.sent.clear();
   }

@@ -164,6 +164,11 @@ public class Store {
       updateEmployeeProfile(b, id, changes);
       return;
     }
+    // Create an empty record first so concurrent merges (e.g. two sales bumping the same day's stats)
+    // queue on the row lock instead of both inserting and one overwriting the other.
+    check(c, id);
+    db.sql("insert into docs (business_id, collection, id, data) values (:b, :c, :id, cast(:d as jsonb)) on conflict do nothing")
+        .param("b", b).param("c", c).param("id", id).param("d", write(Map.of("id", id))).update();
     Map<String, Object> current = getForUpdate(b, c, id).orElseGet(LinkedHashMap::new);
     deepMerge(current, changes);
     current.put("id", id);
