@@ -10,10 +10,10 @@ You need **JDK 21** (if `JAVA_HOME` points to an older JDK, set it for the shell
 export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-21.0.12.101-hotspot"   # Git Bash, if needed
 cd backend
 docker compose up -d db          # PostgreSQL on localhost:5432
-PORT=8081 mvn spring-boot:run    # API on http://localhost:8081; Flyway creates the tables
+PORT=18081 mvn spring-boot:run    # API on http://localhost:18081; Flyway creates the tables
 ```
 
-Or run both in Docker: `docker compose --profile app up --build` (API on http://localhost:8081).
+Or run both in Docker: `docker compose --profile app up --build` (API on http://localhost:18081).
 
 ## Tests
 

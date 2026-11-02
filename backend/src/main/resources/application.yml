@@ -56,7 +56,7 @@ kotahouse:
     rounds: ${FIREBASE_HASH_ROUNDS:8}
     mem-cost: ${FIREBASE_HASH_MEM_COST:14}
   # The API's own public address, e.g. https://api.kotahouse.co.za – used for the Yoco webhook
-  api-url: ${API_URL:http://localhost:8081}
+  api-url: ${API_URL:http://localhost:18081}
   whatsapp:
     # Without a token, outgoing messages are only logged (dry-run)
     token: ${WHATSAPP_TOKEN:}
