@@ -25,6 +25,16 @@ management:
       probes:
         enabled: true
 
+springdoc:
+  # Swagger UI: /swagger-ui.html. Switch off with SWAGGER_ENABLED=false where the API shouldn't be browsable.
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+    persist-authorization: true
+    operations-sorter: alpha
+    tags-sorter: alpha
+
 kotahouse:
   # HS256 key for access tokens, base64, at least 32 bytes. Set JWT_SECRET in every real environment.
   jwt-secret: ${JWT_SECRET:}

@@ -26,6 +26,8 @@ public class SecurityConfig {
         .authorizeHttpRequests(a -> a
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
             .requestMatchers("/actuator/health/**", "/actuator/health").permitAll()
+            // API documentation (only served when SWAGGER_ENABLED is on); every endpoint still needs a token
+            .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/auth/signup",
                 "/api/auth/password-reset", "/api/auth/password-reset/confirm").permitAll()
             .anyRequest().authenticated())

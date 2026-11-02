@@ -20,6 +20,7 @@
     <java.version>21</java.version>
     <bouncycastle.version>1.86</bouncycastle.version>
     <firebase-admin.version>9.11.0</firebase-admin.version>
+    <springdoc.version>3.2.0</springdoc.version>
   </properties>
 
   <dependencies>
@@ -50,6 +51,12 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!-- Swagger UI at /swagger-ui.html, OpenAPI JSON at /v3/api-docs -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
     </dependency>
     <dependency>
       <groupId>org.flywaydb</groupId>
