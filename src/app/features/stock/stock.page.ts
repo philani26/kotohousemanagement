@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { limit, orderBy, query, where } from 'firebase/firestore';
+import { limit, orderBy, query, where } from '../../core/db';
 import { isLowStock, reorderQty, waPhone } from '@shared/domain';
 import { Ingredient, StockMovement, Supplier } from '@shared/models';
 import { parseRandToCents } from '@shared/money';

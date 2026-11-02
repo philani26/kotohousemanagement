@@ -1,4 +1,4 @@
-import { orderBy, query, where } from 'firebase/firestore';
+import { orderBy, query, where } from '../../core/db';
 import { DailyStats } from '@shared/models';
 import { normaliseStats } from '@shared/domain';
 import { BusinessService } from '../../core/business.service';

@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { limit, orderBy, query, where } from 'firebase/firestore';
+import { limit, orderBy, query, where } from '../../core/db';
 import { EXPENSE_INVENTORY_CATEGORY, Expense } from '@shared/models';
 import { parseRandToCents } from '@shared/money';
 import { ApiService } from '../../core/api.service';

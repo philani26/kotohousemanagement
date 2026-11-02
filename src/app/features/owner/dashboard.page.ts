@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ChartConfiguration } from 'chart.js';
-import { limit, orderBy, query, where } from 'firebase/firestore';
+import { limit, orderBy, query, where } from '../../core/db';
 import { dayRange, emptyDailyStats, expectedCash, isLowStock, paymentLabel, paymentParts, profitSummary, sumStats } from '@shared/domain';
 import {
   AppNotification,

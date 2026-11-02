@@ -1,7 +1,7 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { orderBy, query, where } from 'firebase/firestore';
+import { orderBy, query, where } from '../../core/db';
 import { TimeEntry, entryMinutes, formatHours, hoursByWorker, isForgotten } from '@shared/hours';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';

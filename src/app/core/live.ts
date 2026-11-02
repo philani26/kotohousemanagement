@@ -1,5 +1,6 @@
-import { Signal, effect, signal, untracked } from '@angular/core';
-import { DocumentReference, Query, onSnapshot } from 'firebase/firestore';
+import { Signal, effect, inject, signal, untracked } from '@angular/core';
+import { CollectionReference, DocumentReference, Query, query } from './db';
+import { LiveService } from './live.service';
 
 export interface Live<T> {
   data: Signal<T>;
@@ -7,44 +8,66 @@ export interface Live<T> {
   error: Signal<string | null>;
 }
 
+const RELOAD_DEBOUNCE_MS = 150;
+
 /**
- * Subscribes to a Firestore query as a signal. The query factory may read
- * other signals (filters); the listener is re-created when they change and
- * removed when the component is destroyed. Must run in an injection context.
+ * A list of shop records as a signal that stays up to date. The query factory
+ * may read other signals (filters); the list reloads when they change, and
+ * whenever the server says the collection changed. Stops when the component
+ * is destroyed. Must run in an injection context.
  */
-export function liveQuery<T>(factory: () => Query | null): Live<T[]> {
+export function liveQuery<T>(factory: () => Query | CollectionReference | null): Live<T[]> {
+  const live = inject(LiveService);
   const data = signal<T[]>([]);
   const loading = signal(true);
   const error = signal<string | null>(null);
   effect((onCleanup) => {
-    const q = factory();
+    const ref = factory();
     untracked(() => loading.set(true));
-    if (!q) {
+    if (!ref) {
       untracked(() => {
         data.set([]);
         loading.set(false);
       });
       return;
     }
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        data.set(snap.docs.map((d) => ({ ...(d.data() as object), id: d.id }) as T));
-        loading.set(false);
+    const q = ref.kind === 'query' ? ref : query(ref);
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let seq = 0;
+    const load = async () => {
+      const mine = ++seq;
+      try {
+        const rows = await live.query<T>(q);
+        if (stopped || mine !== seq) return;
+        data.set(rows);
         error.set(null);
-      },
-      (err) => {
+      } catch (err) {
+        if (stopped || mine !== seq) return;
         console.error(err);
-        error.set(err.code === 'permission-denied' ? 'You do not have access to this information' : err.message);
-        loading.set(false);
-      },
-    );
-    onCleanup(unsub);
+        const e = err as { code?: string; message?: string };
+        error.set(e.code === 'permission-denied' ? 'You do not have access to this information' : (e.message ?? 'Could not load'));
+      } finally {
+        if (!stopped && mine === seq) loading.set(false);
+      }
+    };
+    const unwatch = live.watch(q.businessId, q.collection, () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void load(), RELOAD_DEBOUNCE_MS);
+    });
+    void load();
+    onCleanup(() => {
+      stopped = true;
+      clearTimeout(timer);
+      unwatch();
+    });
   });
   return { data, loading, error };
 }
 
+/** One shop record as a signal that stays up to date (null while it doesn't exist). */
 export function liveDoc<T>(factory: () => DocumentReference | null): Live<T | null> {
+  const live = inject(LiveService);
   const data = signal<T | null>(null);
   const loading = signal(true);
   const error = signal<string | null>(null);
@@ -57,18 +80,30 @@ export function liveDoc<T>(factory: () => DocumentReference | null): Live<T | nu
       });
       return;
     }
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        data.set(snap.exists() ? ({ ...(snap.data() as object), id: snap.id } as T) : null);
-        loading.set(false);
-      },
-      (err) => {
-        error.set(err.message);
-        loading.set(false);
-      },
-    );
-    onCleanup(unsub);
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = async () => {
+      try {
+        const row = await live.get<T>(ref);
+        if (stopped) return;
+        data.set(row);
+        error.set(null);
+      } catch (err) {
+        if (!stopped) error.set((err as Error).message);
+      } finally {
+        if (!stopped) loading.set(false);
+      }
+    };
+    const unwatch = live.watch(ref.businessId, ref.collection, () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void load(), RELOAD_DEBOUNCE_MS);
+    });
+    void load();
+    onCleanup(() => {
+      stopped = true;
+      clearTimeout(timer);
+      unwatch();
+    });
   });
   return { data, loading, error };
 }

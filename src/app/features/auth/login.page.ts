@@ -10,11 +10,11 @@ function authMessage(err: unknown): string {
   if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return 'Email or password is incorrect';
   if (code.includes('user-disabled')) return 'This account has been deactivated. Speak to the owner.';
   if (code.includes('too-many-requests')) return 'Too many attempts. Wait a few minutes and try again.';
-  if (code.includes('email-already-in-use')) return 'An account with this email already exists – sign in instead';
+  if (code.includes('email-already-in-use') || code === 'already-exists') return 'An account with this email already exists – sign in instead';
   if (code.includes('weak-password')) return 'Use a stronger password (at least 8 characters)';
   if (code.includes('network')) {
-    return environment.useEmulators
-      ? 'Cannot reach the local sign-in emulator. Start it with "npm run emulators" (needs Java 21+).'
+    return environment.name === 'local'
+      ? 'Cannot reach the local backend. Start it with "docker compose --profile app up" in backend/.'
       : 'No internet connection';
   }
   return (err as Error).message ?? 'Sign in failed';

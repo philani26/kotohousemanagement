@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { orderBy, query } from 'firebase/firestore';
+import { orderBy, query } from '../../core/db';
 import { Employee, Role } from '@shared/models';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';

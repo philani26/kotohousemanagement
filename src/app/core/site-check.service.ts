@@ -1,11 +1,10 @@
 import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
-import { doc } from 'firebase/firestore';
+import { collectionRef, doc } from './db';
 import { COLLECTIONS, Employee } from '@shared/models';
 import { ApiResponse } from '@shared/api';
 import { ApiService } from './api.service';
 import { AuthService } from './auth.service';
 import { BusinessService } from './business.service';
-import { FirebaseService } from './firebase.service';
 import { liveDoc } from './live';
 
 export type SiteState = 'not-needed' | 'loading' | 'ok' | 'required';
@@ -19,7 +18,6 @@ export type SiteState = 'not-needed' | 'loading' | 'ok' | 'required';
 export class SiteCheckService {
   private readonly auth = inject(AuthService);
   private readonly biz = inject(BusinessService);
-  private readonly fb = inject(FirebaseService);
   private readonly api = inject(ApiService);
   /** re-evaluated every minute so an expired check-in is noticed */
   private readonly now = signal(Date.now());
@@ -27,7 +25,7 @@ export class SiteCheckService {
   private readonly me = liveDoc<Employee>(() => {
     const b = this.auth.businessId();
     const uid = this.auth.uid();
-    return b && uid && !this.auth.isOwner() ? doc(this.fb.db, COLLECTIONS.businesses, b, COLLECTIONS.employees, uid) : null;
+    return b && uid && !this.auth.isOwner() ? doc(collectionRef(b, COLLECTIONS.employees), uid) : null;
   });
 
   readonly state = computed<SiteState>(() => {

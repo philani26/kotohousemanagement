@@ -5,12 +5,12 @@ import { environment } from './environments/environment';
 
 if (environment.name !== 'prod') document.title = `[${environment.name.toUpperCase()}] ${document.title}`;
 
-if (!environment.useEmulators && environment.firebase.apiKey.startsWith('REPLACE')) {
-  // A build for dev/prod without its Firebase config would otherwise show a blank page.
+if (environment.apiUrl.startsWith('REPLACE')) {
+  // A build for dev/prod without its backend address would otherwise show a blank page.
   document.body.innerHTML = `<div style="font: 16px system-ui; max-width: 520px; margin: 4rem auto; padding: 1rem">
     <h1>Kota House is not configured</h1>
-    <p>This <b>${environment.name}</b> build has no Firebase config. Paste the web app config into
-    <code>src/environments/environment.${environment.name}.ts</code> (see docs/ENVIRONMENTS.md) and rebuild.</p></div>`;
+    <p>This <b>${environment.name}</b> build has no backend address. Set <code>apiUrl</code> in
+    <code>src/environments/environment.${environment.name}.ts</code> (see docs/JAVA-MIGRATION.md) and rebuild.</p></div>`;
 } else {
   bootstrapApplication(App, appConfig).catch((err) => console.error(err));
 }

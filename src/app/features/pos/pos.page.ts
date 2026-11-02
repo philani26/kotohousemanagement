@@ -2,7 +2,7 @@ import { Component, computed, effect, inject, signal, untracked } from '@angular
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { getDoc, orderBy, query, where } from 'firebase/firestore';
+import { orderBy, query, where } from '../../core/db';
 import { Ingredient, Order, PaymentMethod, Product, Recipe } from '@shared/models';
 import { discountPercent, inOrderQueue } from '@shared/domain';
 import { formatZar, parseRandToCents } from '@shared/money';
@@ -656,8 +656,7 @@ export class PosPage {
     const phone = this.customerPhone();
     if (!phone) return;
     try {
-      const snap = await getDoc(this.biz.docRef('customers', phone));
-      this.customer.set(snap.exists() ? (snap.data() as Customer) : null);
+      this.customer.set(await this.biz.get<Customer>(this.biz.docRef('customers', phone)));
       this.customerFound.set(true);
       this.useReward.set(false);
     } catch (err) {

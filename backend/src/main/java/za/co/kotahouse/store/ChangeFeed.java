@@ -23,8 +23,8 @@ public class ChangeFeed {
 
   private final Map<String, List<Consumer<Set<String>>>> listeners = new ConcurrentHashMap<>();
 
-  /** Called by the store for every write. */
-  void changed(String businessId, String collection) {
+  /** Called by the store for every write (and by services that change staff records directly). */
+  public void changed(String businessId, String collection) {
     if (!TransactionSynchronizationManager.isSynchronizationActive()) {
       publish(businessId, Set.of(collection));
       return;

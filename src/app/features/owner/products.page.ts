@@ -1,11 +1,12 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { doc, orderBy, query, writeBatch } from 'firebase/firestore';
+import { doc, orderBy, query } from '../../core/db';
+import { ApiRequest } from '@shared/api';
 import { inOrderQueue, productUnitCost } from '@shared/domain';
 import { Ingredient, Product, ProductCategory, Recipe, RecipeLine } from '@shared/models';
 import { parseRandToCents } from '@shared/money';
 import { BusinessService } from '../../core/business.service';
-import { FirebaseService } from '../../core/firebase.service';
+import { ApiService } from '../../core/api.service';
 import { liveQuery } from '../../core/live';
 import { ToastService } from '../../core/toast.service';
 import { ZarPipe } from '../../shared/pipes';
@@ -148,7 +149,7 @@ interface Draft {
 })
 export class ProductsPage {
   private readonly biz = inject(BusinessService);
-  private readonly fb = inject(FirebaseService);
+  private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   protected readonly busy = signal(false);
   protected readonly draft = signal<Draft | null>(null);
@@ -269,14 +270,17 @@ export class ProductsPage {
     this.busy.set(true);
     try {
       const ref = d.id ? this.biz.docRef('products', d.id) : doc(this.biz.col('products'));
-      const batch = writeBatch(this.fb.db);
-      batch.set(
-        ref,
-        { id: ref.id, name: d.name.trim(), category: d.category, priceCents, active: d.active, sortOrder: Number(d.sortOrder) || 0, colour: d.colour, orderQueue: d.orderQueue, ...this.biz.stamp() },
-        { merge: true },
-      );
-      batch.set(this.biz.docRef('recipes', ref.id), { productId: ref.id, lines: this.cleanLines(d), ...this.biz.stamp() });
-      await batch.commit();
+      // product and recipe are saved together (all or nothing), checked and logged on the server
+      await this.api.call('saveCatalog', {
+        writes: [
+          {
+            collection: 'products',
+            id: ref.id,
+            data: { name: d.name.trim(), category: d.category, priceCents, active: d.active, sortOrder: Number(d.sortOrder) || 0, colour: d.colour, orderQueue: d.orderQueue },
+          },
+          { collection: 'recipes', id: ref.id, data: { lines: this.cleanLines(d) } },
+        ],
+      });
       this.toast.ok('Saved');
       this.draft.set(null);
     } catch (err) {
@@ -290,22 +294,18 @@ export class ProductsPage {
     this.busy.set(true);
     try {
       const ids = new Map<string, string>();
-      const batch = writeBatch(this.fb.db);
+      const writes: ApiRequest<'saveCatalog'>['writes'] = [];
       for (const ing of STARTER_INGREDIENTS) {
         const ref = doc(this.biz.col('ingredients'));
         ids.set(ing.key, ref.id);
-        batch.set(ref, { id: ref.id, name: ing.name, unit: ing.unit, unitCostCents: ing.unitCostCents, reorderLevel: ing.reorderLevel, openingQty: 0, currentQty: 0, active: true, ...this.biz.stamp() });
+        writes.push({ collection: 'ingredients', id: ref.id, data: { name: ing.name, unit: ing.unit, unitCostCents: ing.unitCostCents, reorderLevel: ing.reorderLevel, openingQty: 0, active: true } });
       }
       STARTER_PRODUCTS.forEach((p, i) => {
         const ref = doc(this.biz.col('products'));
-        batch.set(ref, { id: ref.id, name: p.name, category: p.category, priceCents: p.priceCents, colour: p.colour, active: true, sortOrder: i + 1, ...this.biz.stamp() });
-        batch.set(this.biz.docRef('recipes', ref.id), {
-          productId: ref.id,
-          lines: p.recipe.map(([key, quantity]) => ({ ingredientId: ids.get(key)!, quantity })),
-          ...this.biz.stamp(),
-        });
+        writes.push({ collection: 'products', id: ref.id, data: { name: p.name, category: p.category, priceCents: p.priceCents, colour: p.colour, active: true, sortOrder: i + 1 } });
+        writes.push({ collection: 'recipes', id: ref.id, data: { lines: p.recipe.map(([key, quantity]) => ({ ingredientId: ids.get(key)!, quantity })) } });
       });
-      await batch.commit();
+      await this.api.call('saveCatalog', { writes });
       this.toast.ok('Example menu loaded – now check the prices');
     } catch (err) {
       this.toast.error(err);

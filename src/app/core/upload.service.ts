@@ -1,28 +1,36 @@
 import { Injectable, inject } from '@angular/core';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { environment } from '../../environments/environment';
 import { AuthService } from './auth.service';
-import { FirebaseService } from './firebase.service';
+import { problem } from './live.service';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
-/** Receipt uploads go to businesses/{b}/receipts/{uid}/… (see storage.rules). */
+/** Receipt photos and slips: uploaded to the backend into the person's own folder (businesses/{b}/receipts/{uid}/…). */
 @Injectable({ providedIn: 'root' })
 export class UploadService {
-  private readonly fb = inject(FirebaseService);
   private readonly auth = inject(AuthService);
 
   async uploadReceipt(file: File): Promise<string> {
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf') throw new Error('Receipt must be a photo or PDF');
     const blob = file.type.startsWith('image/') ? await shrinkImage(file) : file;
     if (blob.size > MAX_BYTES) throw new Error('Receipt file is too large (max 5 MB)');
-    const ext = blob.type === 'application/pdf' ? 'pdf' : 'jpg';
-    const path = `businesses/${this.auth.businessId()}/receipts/${this.auth.uid()}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
-    await uploadBytes(ref(this.fb.storage, path), blob, { contentType: blob.type });
-    return path;
+    const form = new FormData();
+    form.append('file', blob, blob.type === 'application/pdf' ? 'receipt.pdf' : 'receipt.jpg');
+    // no Content-Type header: the browser sets the multipart boundary itself
+    const res = await fetch(`${environment.apiUrl}/api/shops/${encodeURIComponent(this.auth.businessId() ?? '')}/files`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${await this.auth.token()}` },
+      body: form,
+    });
+    if (!res.ok) throw await problem(res);
+    return ((await res.json()) as { path: string }).path;
   }
 
-  url(path: string): Promise<string> {
-    return getDownloadURL(ref(this.fb.storage, path));
+  /** A link that opens the receipt for five minutes (only for the owner or the uploader). */
+  async url(path: string): Promise<string> {
+    const res = await this.auth.fetch(`/api/shops/${encodeURIComponent(this.auth.businessId() ?? '')}/files/link?path=${encodeURIComponent(path)}`);
+    if (!res.ok) throw await problem(res);
+    return environment.apiUrl + ((await res.json()) as { url: string }).url;
   }
 }
 

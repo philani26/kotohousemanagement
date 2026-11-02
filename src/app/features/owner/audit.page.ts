@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { limit, orderBy, query, where } from 'firebase/firestore';
+import { limit, orderBy, query, where } from '../../core/db';
 import { AuditLog } from '@shared/models';
 import { BusinessService } from '../../core/business.service';
 import { liveQuery } from '../../core/live';

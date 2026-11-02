@@ -32,8 +32,10 @@ public class StaffService {
   private final ShopAccess access;
   private final AuditLog audit;
   private final FirebaseBridge bridge;
+  private final za.co.kotahouse.store.ChangeFeed feed;
 
-  public StaffService(JdbcClient db, PasswordHasher hasher, TokenService tokens, AuthService auth, ShopAccess access, AuditLog audit, FirebaseBridge bridge) {
+  public StaffService(JdbcClient db, PasswordHasher hasher, TokenService tokens, AuthService auth, ShopAccess access, AuditLog audit, FirebaseBridge bridge, za.co.kotahouse.store.ChangeFeed feed) {
+    this.feed = feed;
     this.db = db;
     this.hasher = hasher;
     this.tokens = tokens;
@@ -74,6 +76,7 @@ public class StaffService {
         .param("id", uid).param("e", email).param("n", displayName).param("a", PasswordHasher.ARGON2).param("h", hasher.hash(password)).update();
     db.sql("insert into memberships (business_id, user_id, role, display_name, phone, created_by) values (:b, :u, :r, :n, :p, :c)")
         .param("b", owner.businessId()).param("u", uid).param("r", role).param("n", displayName).param("p", phone).param("c", owner.uid()).update();
+    feed.changed(owner.businessId(), "employees");
     audit.record(owner, "employee.created", "employees", uid, Map.of("displayName", displayName, "email", email, "role", role));
     AfterCommit.run(() -> bridge.syncMember(member(owner.businessId(), uid, password)));
     return uid;
@@ -117,6 +120,7 @@ public class StaffService {
 
     Map<String, Object> details = new LinkedHashMap<>(changes);
     details.put("passwordReset", password != null);
+    feed.changed(owner.businessId(), "employees");
     audit.record(owner, "employee.updated", "employees", uid, details);
     AfterCommit.run(() -> {
       bridge.syncMember(member(owner.businessId(), uid, null));

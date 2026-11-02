@@ -9,13 +9,13 @@
     "test": "ng test",
     "test:domain": "npm --prefix functions test",
     "build:functions": "npm --prefix functions run build",
-    "emulators": "firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data",
     "start:dev": "ng serve --configuration dev",
     "build:dev": "ng build --configuration production,dev",
     "build:prod": "ng build --configuration production",
-    "deploy:dev": "node scripts/check-env.mjs dev && npm run build:dev && firebase deploy --project dev",
-    "deploy:prod": "node scripts/check-env.mjs prod && npm run build:prod && firebase deploy --project prod",
-    "local": "powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1"
+    "deploy:dev": "node scripts/check-env.mjs dev && npm run build:dev && firebase deploy --project dev --only hosting",
+    "deploy:prod": "node scripts/check-env.mjs prod && npm run build:prod && firebase deploy --project prod --only hosting",
+    "local": "powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1",
+    "backend": "docker compose -f backend/docker-compose.yml --profile app up --build"
   },
   "prettier": {
     "printWidth": 100,
@@ -40,7 +40,6 @@
     "@angular/router": "^21.0.0",
     "@angular/service-worker": "^21.2.25",
     "chart.js": "^4.5.0",
-    "firebase": "^12.4.0",
     "qrcode": "^1.5.4",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"

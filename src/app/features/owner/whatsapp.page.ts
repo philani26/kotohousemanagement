@@ -1,7 +1,7 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { limit, orderBy, query } from 'firebase/firestore';
+import { limit, orderBy, query } from '../../core/db';
 import { TimestampLike } from '@shared/models';
 import { waPhone } from '@shared/domain';
 import { ApiService } from '../../core/api.service';

@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { limit, orderBy, query } from 'firebase/firestore';
+import { limit, orderBy, query } from '../../core/db';
 import { expectedCash } from '@shared/domain';
 import { CashSession, Shift } from '@shared/models';
 import { BusinessService } from '../../core/business.service';

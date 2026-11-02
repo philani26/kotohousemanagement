@@ -1,7 +1,8 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { doc, orderBy, query, setDoc, updateDoc } from 'firebase/firestore';
+import { orderBy, query } from '../../core/db';
+import { ApiService } from '../../core/api.service';
 import { Ingredient, IngredientUnit, Supplier } from '@shared/models';
 import { parseRandToCents } from '@shared/money';
 import { BusinessService } from '../../core/business.service';
@@ -144,6 +145,7 @@ interface SupDraft {
 export class IngredientsPage {
   private readonly biz = inject(BusinessService);
   private readonly toast = inject(ToastService);
+  private readonly api = inject(ApiService);
   protected readonly units = UNITS;
   protected readonly busy = signal(false);
   protected readonly ing = signal<IngDraft | null>(null);
@@ -182,14 +184,14 @@ export class IngredientsPage {
     if (!d) return;
     const unitCostCents = parseRandToCents(d.cost);
     if (!d.name.trim() || unitCostCents === null) return this.toast.error('Enter a name and a valid cost');
-    const common = { name: d.name.trim(), unitCostCents, reorderLevel: Number(d.reorder) || 0, supplierId: d.supplierId, active: d.active, countDaily: d.countDaily, ...this.biz.stamp() };
+    const common = { name: d.name.trim(), unitCostCents, reorderLevel: Number(d.reorder) || 0, supplierId: d.supplierId, active: d.active, countDaily: d.countDaily };
     await this.run(async () => {
       if (d.id) {
-        await updateDoc(this.biz.docRef('ingredients', d.id), common);
+        await this.api.call('saveCatalog', { writes: [{ collection: 'ingredients', id: d.id, data: common }] });
       } else {
-        const ref = doc(this.biz.col('ingredients'));
+        // opening stock is set once here; the server records it in the stock ledger
         const opening = Math.max(0, Number(d.opening) || 0);
-        await setDoc(ref, { id: ref.id, unit: d.unit, openingQty: opening, currentQty: opening, ...common });
+        await this.api.call('saveCatalog', { writes: [{ collection: 'ingredients', data: { unit: d.unit, openingQty: opening, ...common } }] });
       }
       this.ing.set(null);
     });
@@ -199,8 +201,9 @@ export class IngredientsPage {
     const s = this.sup();
     if (!s || !s.name.trim()) return this.toast.error('Enter the supplier name');
     await this.run(async () => {
-      const ref = s.id ? this.biz.docRef('suppliers', s.id) : doc(this.biz.col('suppliers'));
-      await setDoc(ref, { id: ref.id, name: s.name.trim(), phone: s.phone.trim(), email: s.email.trim(), notes: s.notes.trim(), active: s.active, ...this.biz.stamp() }, { merge: true });
+      await this.api.call('saveCatalog', {
+        writes: [{ collection: 'suppliers', ...(s.id ? { id: s.id } : {}), data: { name: s.name.trim(), phone: s.phone.trim(), email: s.email.trim(), notes: s.notes.trim(), active: s.active } }],
+      });
       this.sup.set(null);
     });
   }

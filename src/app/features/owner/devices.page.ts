@@ -1,7 +1,7 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { orderBy, query, where } from 'firebase/firestore';
+import { orderBy, query, where } from '../../core/db';
 import { DayActivity, DeviceInvite, DeviceStatus, INVITE_HOURS, ShopDevice, formatDuration } from '@shared/devices';
 import { ApiService } from '../../core/api.service';
 import { BusinessService } from '../../core/business.service';

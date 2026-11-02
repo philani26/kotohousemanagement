@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ChartConfiguration } from 'chart.js';
-import { limit, orderBy, query, where } from 'firebase/firestore';
+import { limit, orderBy, query, where } from '../../core/db';
 import { dayRange, normaliseStats, profitSummary, sumStats } from '@shared/domain';
 import { CashSession, Expense, StockMovement } from '@shared/models';
 import { centsToRandString } from '@shared/money';

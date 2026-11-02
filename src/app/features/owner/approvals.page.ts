@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { getDoc, limit, orderBy, query, where } from 'firebase/firestore';
+import { limit, orderBy, query, where } from '../../core/db';
 import { Approval, Expense } from '@shared/models';
 import { ApiService } from '../../core/api.service';
 import { BusinessService } from '../../core/business.service';
@@ -116,7 +116,7 @@ export class ApprovalsPage {
 
   async receipt(a: Approval) {
     try {
-      const expense = (await getDoc(this.biz.docRef('expenses', a.refId))).data() as Expense | undefined;
+      const expense = (await this.biz.get<Expense>(this.biz.docRef('expenses', a.refId))) ?? undefined;
       if (!expense?.receiptPath) throw new Error('No receipt found');
       window.open(await this.upload.url(expense.receiptPath), '_blank', 'noopener');
     } catch (err) {

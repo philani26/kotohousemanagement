@@ -1,7 +1,7 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { orderBy, query, where } from 'firebase/firestore';
+import { orderBy, query, where } from '../core/db';
 import { Order, OrderStatus } from '@shared/models';
 import { BusinessService } from '../core/business.service';
 import { liveQuery } from '../core/live';
@@ -93,8 +93,8 @@ export class OrderQueueComponent {
   /** open orders, oldest first, numbered by their place in today's queue */
   protected readonly active = computed(() => {
     const now = this.now();
-    return this.list
-      .data()
+    return this.orders
+      .apply(this.list.data())
       .map((o, i, all) => ({
         ...o,
         label: orderLabel(o, all.slice(0, i + 1).filter((x) => x.source !== 'whatsapp').length),

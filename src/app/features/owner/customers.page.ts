@@ -1,7 +1,7 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { orderBy, query } from 'firebase/firestore';
+import { orderBy, query } from '../../core/db';
 import { Customer, rewardReady } from '@shared/loyalty';
 import { centsToRandString, parseRandToCents } from '@shared/money';
 import { displayPhone } from '@shared/whatsapp';

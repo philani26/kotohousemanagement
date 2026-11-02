@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { limit, query, where } from 'firebase/firestore';
+import { limit, query, where } from '../core/db';
 import { AppNotification } from '@shared/models';
 import { AuthService } from '../core/auth.service';
 import { BusinessService } from '../core/business.service';

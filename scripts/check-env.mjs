@@ -1,7 +1,7 @@
 /**
  * Safety checks before a deploy:
  *   node scripts/check-env.mjs dev|prod
- * - the environment file has a real Firebase config (no REPLACE_ME)
+ * - the environment file has a real backend address (no REPLACE_ME, https)
  * - its projectId matches the .firebaserc alias we are deploying to
  * - production needs you to type the project id to confirm
  */
@@ -16,14 +16,16 @@ if (!['dev', 'prod'].includes(target)) {
 
 const envFile = `src/environments/environment.${target}.ts`;
 const env = readFileSync(envFile, 'utf8');
-const projectId = /projectId:\s*'([^']+)'/.exec(env)?.[1];
+const projectId = /hostingProjectId:\s*'([^']+)'/.exec(env)?.[1];
+const apiUrl = /apiUrl:\s*'([^']+)'/.exec(env)?.[1] ?? '';
 const alias = JSON.parse(readFileSync('.firebaserc', 'utf8')).projects?.[target];
 
 const fail = (msg) => {
   console.error(`\n✖ ${msg}\n  See docs/ENVIRONMENTS.md\n`);
   process.exit(1);
 };
-if (env.includes('REPLACE_ME')) fail(`${envFile} still contains REPLACE_ME – paste the Firebase web app config of the ${target} project.`);
+if (env.includes('REPLACE_ME')) fail(`${envFile} still contains REPLACE_ME – set apiUrl to the ${target} Java backend.`);
+if (!apiUrl.startsWith('https://')) fail(`${envFile}: apiUrl must be an https:// address.`);
 if (!alias) fail(`.firebaserc has no "${target}" alias.`);
 if (projectId !== alias) fail(`${envFile} is for "${projectId}" but .firebaserc "${target}" points to "${alias}". They must match.`);
 

@@ -1,10 +1,10 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { limit, orderBy, query, updateDoc, writeBatch } from 'firebase/firestore';
+import { limit, orderBy, query } from '../../core/db';
 import { AppNotification, Severity } from '@shared/models';
 import { BusinessService } from '../../core/business.service';
-import { FirebaseService } from '../../core/firebase.service';
+import { ApiService } from '../../core/api.service';
 import { liveQuery } from '../../core/live';
 import { ToastService } from '../../core/toast.service';
 import { TsPipe } from '../../shared/pipes';
@@ -79,7 +79,7 @@ const ICON: Record<Severity, string> = { critical: '🔴', warning: '🟠', info
 })
 export class NotificationsPage {
   private readonly biz = inject(BusinessService);
-  private readonly fb = inject(FirebaseService);
+  private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   protected readonly icon = ICON;
   protected readonly open = signal<string | null>(null);
@@ -99,7 +99,7 @@ export class NotificationsPage {
   }
 
   read(n: AppNotification) {
-    if (!n.read) updateDoc(this.biz.docRef('notifications', n.id), { read: true }).catch((e) => this.toast.error(e));
+    if (!n.read) this.api.call('markNotificationsRead', { ids: [n.id] }).catch((e) => this.toast.error(e));
   }
 
   linkLabel(link: string) {
@@ -114,8 +114,6 @@ export class NotificationsPage {
   }
 
   async markAll() {
-    const batch = writeBatch(this.fb.db);
-    this.list.data().filter((n) => !n.read).forEach((n) => batch.update(this.biz.docRef('notifications', n.id), { read: true }));
-    await batch.commit().catch((e) => this.toast.error(e));
+    await this.api.call('markNotificationsRead', { all: true }).catch((e) => this.toast.error(e));
   }
 }

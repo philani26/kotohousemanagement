@@ -1,10 +1,8 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { doc, getDoc } from 'firebase/firestore';
-import { COLLECTIONS, Role } from '@shared/models';
+import { Role } from '@shared/models';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
-import { FirebaseService } from '../../core/firebase.service';
 import { OutboxService } from '../../core/outbox.service';
 import { ToastService } from '../../core/toast.service';
 
@@ -61,40 +59,19 @@ interface ShopRow {
 })
 export class ShopsPage {
   protected readonly auth = inject(AuthService);
-  private readonly fb = inject(FirebaseService);
   private readonly api = inject(ApiService);
   private readonly outbox = inject(OutboxService);
   private readonly toast = inject(ToastService);
   protected readonly busy = signal(false);
-  private readonly names = signal<Record<string, string>>({});
   protected shopName = '';
   protected ownerName = this.auth.displayName();
   protected switchAfter = true;
 
   protected readonly shops = computed<ShopRow[]>(() =>
     Object.entries(this.auth.memberships())
-      .map(([id, role]) => ({ id, role, name: this.names()[id] ?? '' }))
+      .map(([id, role]) => ({ id, role, name: this.auth.shopNames()[id] ?? '' }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   );
-
-  constructor() {
-    void this.loadNames();
-  }
-
-  /** Shop names come from each business document (staff of a shop may read it). */
-  private async loadNames() {
-    const entries = await Promise.all(
-      Object.keys(this.auth.memberships()).map(async (id) => {
-        try {
-          const snap = await getDoc(doc(this.fb.db, COLLECTIONS.businesses, id));
-          return [id, (snap.get('name') as string) ?? ''] as const;
-        } catch {
-          return [id, ''] as const;
-        }
-      }),
-    );
-    this.names.set(Object.fromEntries(entries));
-  }
 
   switchTo(id: string) {
     if (this.outbox.count()) {
@@ -115,7 +92,6 @@ export class ShopsPage {
         this.auth.switchShop(businessId, '/products');
       } else {
         this.shopName = '';
-        await this.loadNames();
       }
     } catch (err) {
       this.toast.error(err);

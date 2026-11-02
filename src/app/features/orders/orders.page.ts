@@ -1,7 +1,7 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { orderBy, query, where } from 'firebase/firestore';
+import { orderBy, query, where } from '../../core/db';
 import { Order, OrderStatus } from '@shared/models';
 import { BusinessService } from '../../core/business.service';
 import { liveQuery } from '../../core/live';

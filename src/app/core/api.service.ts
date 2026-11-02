@@ -1,12 +1,10 @@
 import { Injectable, inject } from '@angular/core';
-import { httpsCallable } from 'firebase/functions';
 import { ApiName, ApiRequest, ApiResponse } from '@shared/api';
 import { environment } from '../../environments/environment';
-import { AuthService } from './auth.service';
-import { FirebaseService } from './firebase.service';
+import { AuthService, NetworkError } from './auth.service';
 import { deviceId } from './device-id';
 
-/** Error from a callable, keeping whether it was a network problem (safe to queue/retry). */
+/** Error from an action, keeping whether it was a network problem (safe to queue/retry). */
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -17,47 +15,63 @@ export class ApiError extends Error {
   }
 }
 
-/** Typed wrapper around the trusted Cloud Functions. */
+/** A waiting customer needs a quick answer, and retries are safe. */
+const TIMEOUT_MS = 20_000;
+
+/** Typed calls to the server actions of the Java backend (same names and data as the old Cloud Functions). */
 @Injectable({ providedIn: 'root' })
 export class ApiService {
-  private readonly fb = inject(FirebaseService);
   private readonly auth = inject(AuthService);
 
   async call<K extends ApiName>(name: K, data: ApiRequest<K>): Promise<ApiResponse<K>> {
-    // 20 s instead of the SDK's 70 s: a waiting customer needs a quick answer, and retries are idempotent.
-    const fn = httpsCallable<ApiRequest<K>, ApiResponse<K>>(this.fb.functions, name, { timeout: 20_000 });
-    try {
-      // Tell the backend which shop this device is working in; it checks membership.
-      // A businessId already in the data (queued offline sales) wins.
-      // Also send this device's id: when the owner locks work to approved devices, the server checks it.
-      const businessId = this.auth.businessId();
-      return (await fn({ deviceId: deviceId(), ...(businessId ? { businessId } : {}), ...data })).data;
-    } catch (err) {
-      const e = err as { code?: string };
-      throw new ApiError(friendlyError(err), e?.code ?? 'unknown', isNetworkError(err));
+    // Tell the backend which shop this device is working in; it checks membership.
+    // A businessId already in the data (queued offline sales) wins.
+    // Also send this device's id: when the owner locks work to approved devices, the server checks it.
+    const businessId = (data as { businessId?: string }).businessId ?? this.auth.businessId();
+    const body: Record<string, unknown> = { deviceId: deviceId(), ...(businessId ? { businessId } : {}), ...(data as object) };
+    let path = `/api/rpc/${name}`;
+    let method = 'POST';
+    // logins, shops and staff have their own resources
+    if (name === 'setupBusiness') path = '/api/businesses';
+    else if (name === 'createEmployee') path = `/api/businesses/${businessId}/staff`;
+    else if (name === 'updateEmployee') {
+      path = `/api/businesses/${businessId}/staff/${encodeURIComponent(String((data as { uid: string }).uid))}`;
+      method = 'PATCH';
     }
+    const control = new AbortController();
+    const timer = setTimeout(() => control.abort(), TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await this.auth.fetch(path, { method, body: JSON.stringify(body), signal: control.signal });
+    } catch (err) {
+      if (err instanceof NetworkError || (err as Error).name === 'AbortError') {
+        throw new ApiError(friendlyError(err), 'unavailable', true);
+      }
+      throw new ApiError((err as Error).message || 'Something went wrong', (err as { code?: string }).code ?? 'unknown', false);
+    } finally {
+      clearTimeout(timer);
+    }
+    const text = await res.text();
+    const json = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+    if (!res.ok) {
+      // the server is overloaded or restarting: like no network, safe to retry
+      const network = res.status >= 502 && res.status <= 504;
+      throw new ApiError(network ? friendlyError(new NetworkError('')) : String(json['message'] ?? 'Something went wrong'), String(json['code'] ?? res.status), network);
+    }
+    return json as ApiResponse<K>;
   }
 }
 
-/**
- * The SDK reports a failed fetch as `internal` with the bare message "internal";
- * real server errors from our functions always carry a readable message.
- */
 export function isNetworkError(err: unknown): boolean {
-  const e = err as { code?: string; message?: string };
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
-  return (
-    e?.code === 'functions/unavailable' ||
-    e?.code === 'functions/deadline-exceeded' ||
-    (e?.code === 'functions/internal' && e.message === 'internal')
-  );
+  return err instanceof NetworkError || (err as Error)?.name === 'AbortError' || (err instanceof ApiError && err.network);
 }
 
 export function friendlyError(err: unknown): string {
-  const e = err as { code?: string; message?: string };
+  const e = err as { message?: string };
   if (isNetworkError(err)) {
-    return environment.useEmulators
-      ? 'Cannot reach the local Cloud Functions emulator – nothing was saved. Is `npm run emulators` running?'
+    return environment.name === 'local'
+      ? 'Cannot reach the local backend – nothing was saved. Is `docker compose --profile app up` running in backend/?'
       : 'Cannot reach the server – nothing was saved. Check the network and try again.';
   }
   return e?.message || 'Something went wrong';
