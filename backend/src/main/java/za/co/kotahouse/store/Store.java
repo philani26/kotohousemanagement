@@ -284,6 +284,7 @@ public class Store {
     }
     String key = parts[parts.length - 1];
     switch (value) {
+      case null -> cur.put(key, null);
       case Op.Delete d -> cur.remove(key);
       case Op.ServerTime t -> cur.put(key, Ts.now());
       case Op.Inc inc -> cur.put(key, number(toDouble(cur.get(key)) + inc.by()));
@@ -306,6 +307,7 @@ public class Store {
         target.put(key, nested);
       } else {
         switch (v) {
+          case null -> target.put(key, null);
           case Op.Delete d -> target.remove(key);
           case Op.ServerTime t -> target.put(key, Ts.now());
           case Op.Inc inc -> target.put(key, number(toDouble(target.get(key)) + inc.by()));
