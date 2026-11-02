@@ -14,47 +14,26 @@ import za.co.kotahouse.ApiTestBase;
 /** Phase 1 end to end: owner sign-up, shops, staff logins, tokens, deactivation, password reset, imported passwords. */
 class LoginsAndStaffIT extends ApiTestBase {
 
-  private String uniq(String name) {
-    return name + "-" + UUID.randomUUID().toString().substring(0, 8) + "@example.co.za";
-  }
-
-  private Map<String, Object> body(Object... kv) {
-    Map<String, Object> m = new HashMap<>();
-    for (int i = 0; i < kv.length; i += 2) m.put((String) kv[i], kv[i + 1]);
-    return m;
-  }
-
-  record Shop(String ownerToken, String businessId) {}
-
-  private Shop newShop() {
-    Res signup = post("/api/auth/signup", null, body("email", uniq("owner"), "password", "owner-pass-123", "displayName", "Thandi"));
-    assertThat(signup.status()).isEqualTo(201);
-    String token = signup.get("accessToken");
-    Res shop = post("/api/businesses", token, body("businessName", "Test Kota", "displayName", "Thandi"));
-    assertThat(shop.status()).isEqualTo(201);
-    return new Shop(token, shop.get("businessId"));
-  }
-
   @Test
   void ownerSignsUpOpensAShopAndAddsStaff() {
-    Shop s = newShop();
-    Res me = get("/api/me", s.ownerToken());
+    TestShop s = newShop();
+    Res me = get("/api/me", s.owner().token());
     assertThat(me.status()).isEqualTo(200);
     assertThat((List<?>) me.get("memberships")).hasSize(1);
     assertThat(me.<String>get("user.displayName")).isEqualTo("Thandi");
 
     String staffPath = "/api/businesses/" + s.businessId() + "/staff";
     // an email as the name is refused (it gets mistaken for the sign-in email)
-    Res bad = post(staffPath, s.ownerToken(), body("email", uniq("x"), "password", "12345678", "displayName", "lucky@mail.com", "role", "employee"));
+    Res bad = post(staffPath, s.owner().token(), body("email", uniqEmail("x"), "password", "12345678", "displayName", "lucky@mail.com", "role", "employee"));
     assertThat(bad.status()).isEqualTo(400);
     assertThat(bad.<String>get("message")).contains("can't be an email");
 
-    String email = uniq("cashier");
-    Res created = post(staffPath, s.ownerToken(), body("email", email, "password", "cashier-pass-1", "displayName", "Sipho", "role", "employee", "phone", "0821234567"));
+    String email = uniqEmail("cashier");
+    Res created = post(staffPath, s.owner().token(), body("email", email, "password", "cashier-pass-1", "displayName", "Sipho", "role", "employee", "phone", "0821234567"));
     assertThat(created.status()).isEqualTo(201);
-    assertThat(post(staffPath, s.ownerToken(), body("email", email, "password", "cashier-pass-1", "displayName", "Again", "role", "employee")).code()).isEqualTo("already-exists");
+    assertThat(post(staffPath, s.owner().token(), body("email", email, "password", "cashier-pass-1", "displayName", "Again", "role", "employee")).code()).isEqualTo("already-exists");
 
-    Res list = get(staffPath, s.ownerToken());
+    Res list = get(staffPath, s.owner().token());
     assertThat(list.list()).extracting(m -> m.get("displayName")).contains("Thandi", "Sipho");
 
     // the cashier signs in, sees their shop, but can't manage staff
@@ -67,15 +46,15 @@ class LoginsAndStaffIT extends ApiTestBase {
     // ...and can't add a shop
     assertThat(post("/api/businesses", login.get("accessToken"), body("businessName", "Mine", "displayName", "Sipho")).code()).isEqualTo("permission-denied");
 
-    assertThat(db.sql("select count(*) from audit_log where business_id = :b").param("b", s.businessId()).query(Integer.class).single()).isGreaterThanOrEqualTo(2);
+    assertThat(db.sql("select count(*) from docs where business_id = :b and collection = 'auditLogs'").param("b", s.businessId()).query(Integer.class).single()).isGreaterThanOrEqualTo(2);
   }
 
   @Test
   void wrongPasswordAndUnknownEmailLookTheSame() {
-    Shop s = newShop();
+    TestShop s = newShop();
     String email = db.sql("select email from users u join businesses b on b.owner_uid = u.id where b.id = :b").param("b", s.businessId()).query(String.class).single();
     Res wrong = post("/api/auth/login", null, body("email", email, "password", "nope-nope-nope"));
-    Res unknown = post("/api/auth/login", null, body("email", uniq("nobody"), "password", "nope-nope-nope"));
+    Res unknown = post("/api/auth/login", null, body("email", uniqEmail("nobody"), "password", "nope-nope-nope"));
     assertThat(wrong.status()).isEqualTo(401);
     assertThat(unknown.status()).isEqualTo(401);
     assertThat(wrong.body()).isEqualTo(unknown.body());
@@ -85,7 +64,7 @@ class LoginsAndStaffIT extends ApiTestBase {
 
   @Test
   void refreshTokensRotateAndReuseEndsEverySession() {
-    Res signup = post("/api/auth/signup", null, body("email", uniq("rot"), "password", "rotate-pass-1", "displayName", "Rot"));
+    Res signup = post("/api/auth/signup", null, body("email", uniqEmail("rot"), "password", "rotate-pass-1", "displayName", "Rot"));
     String first = signup.get("refreshToken");
     Res next = post("/api/auth/refresh", null, body("refreshToken", first));
     assertThat(next.status()).isEqualTo(200);
@@ -104,17 +83,17 @@ class LoginsAndStaffIT extends ApiTestBase {
 
   @Test
   void deactivatingStopsAWorkerImmediately() {
-    Shop s = newShop();
+    TestShop s = newShop();
     String staffPath = "/api/businesses/" + s.businessId() + "/staff";
-    String email = uniq("chef");
-    String uid = post(staffPath, s.ownerToken(), body("email", email, "password", "chef-pass-123", "displayName", "Mandla", "role", "kitchen")).get("uid");
+    String email = uniqEmail("chef");
+    String uid = post(staffPath, s.owner().token(), body("email", email, "password", "chef-pass-123", "displayName", "Mandla", "role", "kitchen")).get("uid");
     Res login = post("/api/auth/login", null, body("email", email, "password", "chef-pass-123"));
     String access = login.get("accessToken");
     assertThat(get("/api/me", access).status()).isEqualTo(200);
 
     String ownerUid = db.sql("select owner_uid from businesses where id = :b").param("b", s.businessId()).query(String.class).single();
-    assertThat(patch(staffPath + "/" + ownerUid, s.ownerToken(), body("active", false)).code()).isEqualTo("failed-precondition");
-    assertThat(patch(staffPath + "/" + uid, s.ownerToken(), body("active", false)).status()).isEqualTo(200);
+    assertThat(patch(staffPath + "/" + ownerUid, s.owner().token(), body("active", false)).code()).isEqualTo("failed-precondition");
+    assertThat(patch(staffPath + "/" + uid, s.owner().token(), body("active", false)).status()).isEqualTo(200);
 
     // their still-valid access token no longer opens the shop, and they can't sign in or refresh
     assertThat(get(staffPath, access).<String>get("message")).isEqualTo("Your account has been deactivated");
@@ -122,7 +101,7 @@ class LoginsAndStaffIT extends ApiTestBase {
     assertThat(post("/api/auth/refresh", null, body("refreshToken", login.get("refreshToken"))).status()).isEqualTo(401);
 
     // reactivate, rename and set a new password
-    assertThat(patch(staffPath + "/" + uid, s.ownerToken(), body("active", true, "displayName", "Chef Mandla", "password", "new-chef-pass")).status()).isEqualTo(200);
+    assertThat(patch(staffPath + "/" + uid, s.owner().token(), body("active", true, "displayName", "Chef Mandla", "password", "new-chef-pass")).status()).isEqualTo(200);
     assertThat(post("/api/auth/login", null, body("email", email, "password", "chef-pass-123")).status()).isEqualTo(401);
     Res again = post("/api/auth/login", null, body("email", email, "password", "new-chef-pass"));
     assertThat(again.status()).isEqualTo(200);
@@ -131,10 +110,10 @@ class LoginsAndStaffIT extends ApiTestBase {
 
   @Test
   void passwordResetByEmail() {
-    String email = uniq("reset");
+    String email = uniqEmail("reset");
     post("/api/auth/signup", null, body("email", email, "password", "old-pass-123", "displayName", "Reset"));
     assertThat(post("/api/auth/password-reset", null, body("email", email)).status()).isEqualTo(200);
-    assertThat(post("/api/auth/password-reset", null, body("email", uniq("nobody"))).status()).isEqualTo(200); // no hint
+    assertThat(post("/api/auth/password-reset", null, body("email", uniqEmail("nobody"))).status()).isEqualTo(200); // no hint
     assertThat(mail.sent).hasSize(1);
     Matcher m = Pattern.compile("token=([A-Za-z0-9_-]+)").matcher(mail.sent.get(0)[2]);
     assertThat(m.find()).isTrue();
@@ -150,7 +129,7 @@ class LoginsAndStaffIT extends ApiTestBase {
   @Test
   void passwordsImportedFromFirebaseKeepWorkingAndAreUpgraded() {
     String uid = "imported" + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
-    String email = uniq("imported");
+    String email = uniqEmail("imported");
     // Firebase's published example user (see FirebaseScryptTest)
     db.sql("insert into users (id, email, display_name, password_algo, password_hash, password_salt) values (:id, :e, 'Lucky', 'firebase-scrypt', :h, :s)")
         .param("id", uid).param("e", email)

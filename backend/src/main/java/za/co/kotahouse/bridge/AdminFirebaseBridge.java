@@ -40,7 +40,7 @@ public class AdminFirebaseBridge implements FirebaseBridge {
     FirebaseApp app = FirebaseApp.getApps().isEmpty() ? FirebaseApp.initializeApp(options) : FirebaseApp.getInstance();
     this.auth = FirebaseAuth.getInstance(app);
     this.firestore = FirestoreClient.getFirestore(app);
-    try (InputStream in = getClass().getResourceAsStream("/bridge/default-settings.json")) {
+    try (InputStream in = getClass().getResourceAsStream("/defaults/settings.json")) {
       this.defaultSettings = json.readValue(in, Map.class);
     }
   }

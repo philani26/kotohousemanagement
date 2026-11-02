@@ -12,6 +12,9 @@ import za.co.kotahouse.common.ApiException;
 import za.co.kotahouse.common.Ids;
 import za.co.kotahouse.common.Text;
 import za.co.kotahouse.config.AppProperties;
+import za.co.kotahouse.settings.SettingsService;
+import za.co.kotahouse.store.Op;
+import za.co.kotahouse.store.Store;
 
 /** Shops (tenants). Ported from setupBusiness in functions/src/business.ts. */
 @Service
@@ -23,8 +26,12 @@ public class ShopService {
   private final AuditLog audit;
   private final FirebaseBridge bridge;
   private final AppProperties props;
+  private final Store store;
+  private final SettingsService settings;
 
-  public ShopService(JdbcClient db, ShopAccess access, AuditLog audit, FirebaseBridge bridge, AppProperties props) {
+  public ShopService(JdbcClient db, ShopAccess access, AuditLog audit, FirebaseBridge bridge, AppProperties props, Store store, SettingsService settings) {
+    this.store = store;
+    this.settings = settings;
     this.db = db;
     this.access = access;
     this.audit = audit;
@@ -57,6 +64,12 @@ public class ShopService {
     db.sql("insert into memberships (business_id, user_id, role, display_name, created_by) values (:b, :u, 'owner', :n, :u)")
         .param("b", businessId).param("u", uid).param("n", displayName).update();
     Caller owner = new Caller(uid, businessId, "owner", displayName);
+    // the shop's settings start from the defaults, as setupBusiness did
+    Map<String, Object> shopSettings = settings.defaults();
+    shopSettings.put("businessName", businessName);
+    shopSettings.put("updatedAt", Op.serverTime());
+    shopSettings.put("updatedBy", uid);
+    store.set(businessId, SettingsService.COLLECTION, SettingsService.DOC, shopSettings);
     audit.record(owner, "business.created", "businesses", businessId, Map.of("businessName", businessName, "additionalShop", !existing.isEmpty()));
 
     // Mirror to Firebase only once PostgreSQL has committed.

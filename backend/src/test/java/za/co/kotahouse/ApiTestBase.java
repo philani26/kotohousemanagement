@@ -92,6 +92,38 @@ public abstract class ApiTestBase {
     return call(HttpMethod.PATCH, path, token, body);
   }
 
+  protected static String uniqEmail(String name) {
+    return name + "-" + java.util.UUID.randomUUID().toString().substring(0, 8) + "@example.co.za";
+  }
+
+  protected static Map<String, Object> body(Object... kv) {
+    Map<String, Object> m = new java.util.HashMap<>();
+    for (int i = 0; i < kv.length; i += 2) m.put((String) kv[i], kv[i + 1]);
+    return m;
+  }
+
+  /** A signed-in person of a test shop. */
+  public record Person(String uid, String token) {}
+
+  public record TestShop(String businessId, Person owner) {}
+
+  /** Signs up an owner and opens a shop. */
+  protected TestShop newShop() {
+    Res signup = post("/api/auth/signup", null, body("email", uniqEmail("owner"), "password", "owner-pass-123", "displayName", "Thandi"));
+    String token = signup.get("accessToken");
+    Res shop = post("/api/businesses", token, body("businessName", "Test Kota", "displayName", "Thandi"));
+    return new TestShop(shop.get("businessId"), new Person(signup.get("user.uid"), token));
+  }
+
+  /** Adds a staff login (role employee = cashier, or kitchen) and signs them in. */
+  protected Person addStaff(TestShop shop, String role, String name) {
+    String email = uniqEmail(role);
+    Res created = post("/api/businesses/" + shop.businessId() + "/staff", shop.owner().token(),
+        body("email", email, "password", "staff-pass-123", "displayName", name, "role", role));
+    Res login = post("/api/auth/login", null, body("email", email, "password", "staff-pass-123"));
+    return new Person(created.get("uid"), login.get("accessToken"));
+  }
+
   /** Captures emails instead of logging them. */
   public static class SentMail implements Mailer {
     public final List<String[]> sent = new ArrayList<>();
