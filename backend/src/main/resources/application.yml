@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: kotahouse-backend
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/kotahouse}
+    username: ${DATABASE_USER:kotahouse}
+    password: ${DATABASE_PASSWORD:kotahouse}
+  flyway:
+    locations: classpath:db/migration
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+kotahouse:
+  # HS256 key for access tokens, base64, at least 32 bytes. Set JWT_SECRET in every real environment.
+  jwt-secret: ${JWT_SECRET:}
+  access-token-ttl: 15m
+  refresh-token-ttl: 30d
+  # Comma-separated emails allowed to create shops; empty = anyone signed in
+  owner-emails: ${OWNER_EMAILS:}
+  # Browser origins allowed to call the API
+  cors-origins: ${CORS_ORIGINS:http://localhost:4200}
+  # Link in password-reset emails
+  app-url: ${APP_URL:http://localhost:4200}
+  firebase:
+    # On while some modules still run on Firebase (see docs/JAVA-MIGRATION.md)
+    enabled: ${FIREBASE_BRIDGE:false}
+    project-id: ${FIREBASE_PROJECT_ID:}
+    # Password hash parameters (Firebase console → Authentication → Users → ⋮) for imported passwords
+    signer-key: ${FIREBASE_HASH_SIGNER_KEY:}
+    salt-separator: ${FIREBASE_HASH_SALT_SEPARATOR:Bw==}
+    rounds: ${FIREBASE_HASH_ROUNDS:8}
+    mem-cost: ${FIREBASE_HASH_MEM_COST:14}

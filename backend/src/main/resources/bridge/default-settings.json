@@ -1,0 +1,110 @@
+{
+  "businessName": "Kota House",
+  "currency": "ZAR",
+  "timezone": "Africa/Johannesburg",
+  "openingHour": 9,
+  "closingHour": 20,
+  "tradingDays": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "maxEmployeeDiscountPercent": 0,
+  "thresholds": {
+    "cashDiscrepancyCents": 2000,
+    "refundAlertCents": 10000,
+    "discountAlertPercent": 10,
+    "wastageAlertCents": 5000,
+    "stockVarianceAlertCents": 5000,
+    "noSaleMinutes": 120,
+    "missingCloseGraceMinutes": 60
+  },
+  "productCategories": [
+    {
+      "id": "kota",
+      "name": "Kotas"
+    },
+    {
+      "id": "sides",
+      "name": "Chips & sides"
+    },
+    {
+      "id": "drinks",
+      "name": "Drinks"
+    },
+    {
+      "id": "extras",
+      "name": "Extras"
+    },
+    {
+      "id": "other",
+      "name": "Other"
+    }
+  ],
+  "expenseCategories": [
+    "Ingredients & stock",
+    "Gas",
+    "Electricity",
+    "Transport",
+    "Cleaning supplies",
+    "Packaging",
+    "Equipment repairs",
+    "Other"
+  ],
+  "openingChecklist": [
+    "Counted opening float",
+    "Fryer and stove checked",
+    "Work surfaces cleaned",
+    "Stock looks correct"
+  ],
+  "closingChecklist": [
+    "Fryer switched off and cleaned",
+    "Gas closed",
+    "Cash counted and locked away",
+    "Floors and counters cleaned",
+    "Doors and windows locked"
+  ],
+  "notifications": {
+    "email": false,
+    "emailTo": [],
+    "whatsapp": false,
+    "whatsappTo": []
+  },
+  "whatsapp": {
+    "ordering": false,
+    "phoneNumberId": "",
+    "displayNumber": ""
+  },
+  "geofence": {
+    "enabled": false,
+    "lat": null,
+    "lng": null,
+    "radiusM": 150
+  },
+  "devices": {
+    "lockToApproved": false,
+    "awayAlertMinutes": 60,
+    "shareLocation": false
+  },
+  "loyalty": {
+    "enabled": false,
+    "stampsNeeded": 9,
+    "minSpendCents": 3000,
+    "rewardValueCents": 4000
+  },
+  "yoco": {
+    "enabled": false,
+    "mode": null
+  },
+  "cctv": {
+    "provider": "",
+    "viewerUrl": "",
+    "androidAppUrl": "",
+    "iosAppUrl": "",
+    "notes": ""
+  }
+}

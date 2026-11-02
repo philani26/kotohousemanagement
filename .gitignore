@@ -52,3 +52,6 @@ functions/.env.*
 emulator-data/
 !functions/.env.example
 firebase-export-*/
+
+# Java backend
+/backend/target/

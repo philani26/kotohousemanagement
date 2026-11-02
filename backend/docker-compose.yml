@@ -1,0 +1,37 @@
+# Local development: PostgreSQL (and optionally the backend itself).
+#   docker compose up -d db          # just the database, run the app from your IDE / mvn spring-boot:run
+#   docker compose up --build        # database + backend on http://localhost:8080
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: kotahouse
+      POSTGRES_USER: kotahouse
+      POSTGRES_PASSWORD: kotahouse
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kotahouse"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: .
+    profiles: ["app"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/kotahouse
+      DATABASE_USER: kotahouse
+      DATABASE_PASSWORD: kotahouse
+      # local only – never reuse in a real environment
+      JWT_SECRET: bG9jYWwtZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0ZXMh
+      CORS_ORIGINS: http://localhost:4200
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
