@@ -29,7 +29,7 @@ services:
       DATABASE_PASSWORD: kotahouse
       # local only – never reuse in a real environment
       JWT_SECRET: bG9jYWwtZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0ZXMh
-      CORS_ORIGINS: http://localhost:4200
+      CORS_ORIGINS: http://localhost:4200,http://localhost:4210
     # WhatsApp and other secrets from backend/.env (optional, git-ignored)
     env_file:
       - path: .env
