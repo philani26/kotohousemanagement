@@ -67,3 +67,5 @@ kotahouse:
   yoco:
     # Test mode without calling Yoco: fake checkout links and a fixed webhook secret. Local development and tests only.
     dry-run: ${YOCO_DRY_RUN:false}
+  # Lets Cloud Scheduler run the 15-minute checks (POST /api/internal/monitor); empty = off
+  monitor-token: ${MONITOR_TOKEN:}

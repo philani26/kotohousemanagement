@@ -7,7 +7,7 @@ import { Environment } from './environment.model';
 export const environment: Environment = {
   name: 'prod',
   production: true,
-  // the production Java backend on AWS Cape Town, once deployed (docs/JAVA-MIGRATION.md)
-  apiUrl: 'REPLACE_ME',
+  // the Java backend on Google Cloud Run, Johannesburg (africa-south1)
+  apiUrl: 'https://kotahouse-api-392148085497.africa-south1.run.app',
   hostingProjectId: 'kotahouse-prod',
 };

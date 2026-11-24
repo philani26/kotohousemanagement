@@ -21,6 +21,7 @@
     <bouncycastle.version>1.86</bouncycastle.version>
     <firebase-admin.version>9.11.0</firebase-admin.version>
     <springdoc.version>3.2.0</springdoc.version>
+    <cloud-sql-socket-factory.version>1.30.2</cloud-sql-socket-factory.version>
   </properties>
 
   <dependencies>
@@ -65,6 +66,13 @@
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <!-- Google Cloud: Cloud Run reaches Cloud SQL through the secure connector (no public database address) -->
+    <dependency>
+      <groupId>com.google.cloud.sql</groupId>
+      <artifactId>postgres-socket-factory</artifactId>
+      <version>${cloud-sql-socket-factory.version}</version>
       <scope>runtime</scope>
     </dependency>
     <!-- Argon2id for new passwords, scrypt + AES for passwords imported from Firebase -->

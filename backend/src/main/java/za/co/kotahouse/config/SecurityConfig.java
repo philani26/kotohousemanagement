@@ -29,6 +29,8 @@ public class SecurityConfig {
             // API documentation (only served when SWAGGER_ENABLED is on); every endpoint still needs a token
             // Called by Meta and Yoco; each checks its own signature instead of a login
             .requestMatchers("/api/webhooks/**").permitAll()
+            // the scheduled checks, called by Cloud Scheduler with its own token
+            .requestMatchers(HttpMethod.POST, "/api/internal/monitor").permitAll()
             // signed, five-minute links to a receipt photo (the browser opens them in a new tab)
             .requestMatchers(HttpMethod.GET, "/api/files/**").permitAll()
             .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**").permitAll()
