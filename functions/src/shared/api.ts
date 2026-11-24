@@ -1,5 +1,6 @@
 import { Cents } from './money';
 import { DeviceStatus, Span } from './devices';
+import { CardRow } from './cards';
 import { CartItem } from './domain';
 import { ChecklistAnswer, PaymentMethod, Role, StockCountLine, StockMovementType } from './models';
 
@@ -111,6 +112,10 @@ export interface Api {
   createOrder: [{ orderId: string; lines: { name: string; quantity: number }[]; note?: string; receiptNo: number | null; createdAtMillis: number }, { ok: true; duplicate: boolean }];
   setOrderStatus: [{ orderId: string; status: 'new' | 'preparing' | 'ready' | 'collected'; atMillis?: number }, { ok: true }];
   linkOrderSale: [{ orderId: string; receiptNo?: number | null; paid?: boolean; saleId?: string }, { ok: true; found: boolean }];
+  /** card machines of any provider (Java backend) */
+  importCardTransactions: [{ provider: string; rows: CardRow[] }, { added: number; duplicates: number; matched: number; unmatched: number }];
+  matchCardTransaction: [{ transactionId: string; saleId?: string }, { ok: true }];
+  cardWebhook: [{ renew?: boolean }, { url: string; header: string; token: string }];
   connectYoco: [{ secretKey: string }, { mode: 'live' | 'test' }];
   disconnectYoco: [Record<string, never>, { ok: true }];
   createYocoCheckout: [{ saleId: string; amountCents: Cents }, { checkoutId: string; redirectUrl: string }];

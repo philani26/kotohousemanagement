@@ -37,8 +37,11 @@ public class MonitorJob {
   private final SettingsService settingsService;
   private final Notifier notifier;
   private final TransactionTemplate tx;
+  private final za.co.kotahouse.cards.CardService cards;
 
-  public MonitorJob(JdbcClient db, Store store, SettingsService settingsService, Notifier notifier, TransactionTemplate tx) {
+  public MonitorJob(JdbcClient db, Store store, SettingsService settingsService, Notifier notifier, TransactionTemplate tx,
+      za.co.kotahouse.cards.CardService cards) {
+    this.cards = cards;
     this.db = db;
     this.store = store;
     this.settingsService = settingsService;
@@ -122,6 +125,10 @@ public class MonitorJob {
             .link("/dashboard"));
       }
     }
+
+    // card machines: match payments that arrived before their sale was rung up, then flag what is still unexplained (once a day)
+    cards.reconcile(b, s);
+    if (store.get(b, Notifier.COLLECTION, "cardUnmatched_" + today).isEmpty()) cards.alertUnexplained(b, "15-minute check");
 
     if (open.isEmpty() && tradingToday && hour >= s.openingHour() + 1 && hour < s.closingHour()) {
       boolean openedToday = !store.list(b, Query.of("shifts").where("dayKey", "==", today).limit(1).build()).isEmpty();

@@ -111,6 +111,13 @@ Give the person who prepares food a **Kitchen** login (**Staff** → Role: *Kitc
 ### Customers and the stamp card
 **Customers** (owner menu): switch the stamp card on and choose how many stamps earn a reward, how much a sale must be to earn a stamp and how much the reward takes off (e.g. 9 stamps, R30, R40 = "buy 9 kotas, the 10th is free"). The list shows every customer's visits, spend, stamps and rewards used, with **⬇ CSV**. The server checks the stamps, so a cashier can't give a reward that wasn't earned. Rewards count as discounts in reports. Cashiers can look up one number at the till but can't see the list.
 
+### Card machines (any provider)
+**Card machines** (owner menu) checks card sales against what your card machine actually took. It works with any machine: Yoco, iKhokha, Adumo, or a bank's speedpoint.
+- **Upload:** download your transactions as a CSV from the provider's portal or app, choose the provider and upload the file. The app guesses which column is which and shows a preview. Each payment is matched to its card sale (same amount, within 15 minutes) and the sale becomes **Verified**. Uploading the same file twice is harmless.
+- **Live link:** if your provider, or a tool like Zapier or Make, can send each payment to a web address, use the link shown there. Payments are then matched as they happen, and also every 15 minutes in case the sale was rung up after the card was tapped.
+- **Card payments with no sale:** the machine took the money but no sale was rung up. Food may have been handed over without a sale. You also get an alert. Use **Match to a sale** if it was just a timing or amount slip.
+- **Card sales not on a machine report:** card sales that no payment confirms yet. Once your latest report is uploaded, check them: the sale may have been paid another way.
+
 ### Card payments on the customer's phone (Yoco)
 **Settings › Card payment on the customer's phone**: paste the **secret key** from the Yoco app (Checkout API integration → *How to connect*). Start with the `sk_test_` key and pay with Yoco's test cards; switch to the `sk_live_` key when it works. The key stays on the server. These sales are marked *Verified* automatically, because Yoco confirmed them. The card machine itself can't be linked to a web app; Yoco only allows that from approved Android/iOS apps.
 

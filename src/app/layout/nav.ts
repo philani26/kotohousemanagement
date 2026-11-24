@@ -21,6 +21,7 @@ export const OWNER_NAV: NavItem[] = [
   { path: '/cash', label: 'Cash-ups', ico: '💰', group: 'Owner' },
   { path: '/reports', label: 'Reports', ico: '📈', group: 'Owner' },
   { path: '/notifications', label: 'Alerts', ico: '🔔', group: 'Owner' },
+  { path: '/cards', label: 'Card machines', ico: '💳', group: 'Owner' },
   { path: '/customers', label: 'Customers', ico: '⭐', group: 'Owner' },
   { path: '/whatsapp', label: 'WhatsApp', ico: '💬', group: 'Owner' },
   { path: '/devices', label: 'Devices', ico: '📱', group: 'Owner' },

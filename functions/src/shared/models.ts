@@ -68,6 +68,7 @@ export const COLLECTIONS = {
   timeEntries: 'timeEntries',
   customers: 'customers',
   yocoCheckouts: 'yocoCheckouts',
+  cardTransactions: 'cardTransactions',
   private: 'private',
   deviceInvites: 'deviceInvites',
 } as const;
@@ -259,6 +260,8 @@ export interface SalePayment {
   /** card part paid on the customer's phone through Yoco */
   yocoCheckoutId?: string;
   verifiedBy?: string;
+  /** the card-machine payment matched to this sale (cardTransactions) */
+  cardTxnId?: string;
   verifiedAt?: TimestampLike;
 }
 

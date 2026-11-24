@@ -73,7 +73,7 @@ public final class ReadRules {
     RULES.put("businessSettings", roles(ANYONE));
     RULES.put("orders", roles(ANYONE));
     for (String c : new String[] {"products", "recipes", "ingredients", "suppliers"}) RULES.put(c, roles(STAFF));
-    for (String c : new String[] {"cashSessions", "whatsappMessages", "whatsappChats", "devices", "activity", "deviceInvites", "auditLogs", "dailyStats", "notifications"}) {
+    for (String c : new String[] {"cashSessions", "whatsappMessages", "whatsappChats", "devices", "activity", "deviceInvites", "auditLogs", "dailyStats", "notifications", "cardTransactions"}) {
       RULES.put(c, ownerOnly);
     }
     RULES.put("employees", ownerOrOwn(ANYONE, "uid"));
