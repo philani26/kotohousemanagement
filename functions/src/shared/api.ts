@@ -107,6 +107,10 @@ export interface Api {
   pairDevice: [{ code: string; deviceId: string; userAgent: string }, { status: DeviceStatus; label: string }];
   /** owner's menu, recipes, stock items, suppliers and settings (Java backend) */
   saveCatalog: [{ writes: { collection: 'products' | 'recipes' | 'ingredients' | 'suppliers' | 'businessSettings'; id?: string; data: Record<string, unknown> }[] }, { ids: string[] }];
+  startListening: [{ targetDevice: string }, { sessionId: string; maxMinutes: number }];
+  stopListening: [{ targetDevice: string }, { ok: boolean }];
+  acceptListeningNotice: [Record<string, never>, { ok: boolean }];
+  deleteCatalog: [{ products?: string[]; ingredients?: string[] }, { count: number }];
   markNotificationsRead: [{ ids?: string[]; all?: boolean }, { count: number }];
   /** kitchen tickets (Java backend); safe to repeat, so they can wait in the offline queue */
   createOrder: [{ orderId: string; lines: { name: string; quantity: number }[]; note?: string; receiptNo: number | null; createdAtMillis: number }, { ok: true; duplicate: boolean }];

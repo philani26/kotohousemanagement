@@ -57,6 +57,13 @@ public record Settings(Map<String, Object> data) {
     return section("notifications").get("emailTo") instanceof List<?> l ? (List<String>) l : List.of();
   }
 
+  /** owner phone numbers for WhatsApp alerts, in WhatsApp form (27…); anything else is skipped */
+  public List<String> whatsappTo() {
+    return section("notifications").get("whatsappTo") instanceof List<?> l
+        ? l.stream().map(p -> za.co.kotahouse.domain.Domain.waPhone(String.valueOf(p))).filter(p -> p != null).distinct().toList()
+        : List.of();
+  }
+
   static String str(Object v, String fallback) {
     return v instanceof String s && !s.isBlank() ? s : fallback;
   }

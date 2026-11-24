@@ -72,6 +72,8 @@ public final class ReadRules {
     Rule ownerOnly = roles(Set.of("owner"));
     RULES.put("businessSettings", roles(ANYONE));
     RULES.put("orders", roles(ANYONE));
+    // the device must see when it is being listened to (and anyone on it may)
+    RULES.put("listenSessions", roles(ANYONE));
     for (String c : new String[] {"products", "recipes", "ingredients", "suppliers"}) RULES.put(c, roles(STAFF));
     for (String c : new String[] {"cashSessions", "whatsappMessages", "whatsappChats", "devices", "activity", "deviceInvites", "auditLogs", "dailyStats", "notifications", "cardTransactions"}) {
       RULES.put(c, ownerOnly);

@@ -64,6 +64,7 @@ export const COLLECTIONS = {
   whatsappChats: 'whatsappChats',
   whatsappMessages: 'whatsappMessages',
   devices: 'devices',
+  listenSessions: 'listenSessions',
   activity: 'activity',
   timeEntries: 'timeEntries',
   customers: 'customers',
@@ -110,6 +111,8 @@ export interface Employee {
   siteCheckDistanceM?: number;
   /** device this person last used, and until when it counts as an approved shop device */
   deviceId?: string;
+  /** when the worker accepted the live-listening notice */
+  listeningNoticeAt?: TimestampLike;
   deviceOkUntil?: TimestampLike | null;
 }
 

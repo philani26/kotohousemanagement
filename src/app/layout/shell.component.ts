@@ -1,6 +1,10 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { limit, query, where } from '../core/db';
+import { Employee } from '@shared/models';
+import { ApiService } from '../core/api.service';
+import { ListenService } from '../core/listen.service';
+import { liveDoc } from '../core/live';
 import { AppNotification } from '@shared/models';
 import { AuthService } from '../core/auth.service';
 import { BusinessService } from '../core/business.service';
@@ -79,6 +83,24 @@ import { environment } from '../../environments/environment';
       </nav>
 
       <main class="content">
+        @if (listen.requested(); as l) {
+          <div class="listen-banner" role="status" (click)="listen.resume()">
+            <span class="listen-dot"></span>
+            <div>
+              <strong>🎙 {{ l.ownerName || 'The owner' }} is listening live on this device</strong>
+              <div class="tiny">{{ listen.problem() ?? 'Live only – nothing is recorded. It stops when the owner stops.' }}</div>
+            </div>
+          </div>
+        }
+        @if (needsNotice()) {
+          <div class="card listen-notice">
+            <h2>🎙 Live listening in this shop</h2>
+            <p>The owner of {{ biz.settings().businessName }} can listen <strong>live</strong> through the shop's phones and tablets to see how
+              the shop is running. When that happens, a red banner shows on the device the whole time. Nothing is recorded.</p>
+            <p class="small muted">Your employer must have told you about this. Questions? Speak to the owner before you continue.</p>
+            <button class="btn primary" [disabled]="noticeBusy()" (click)="acceptNotice()">I understand</button>
+          </div>
+        } @else {
         @switch (device.blocked() ? 'device' : site.state()) {
           @case ('device') {
             <app-device-blocked />
@@ -92,6 +114,7 @@ import { environment } from '../../environments/environment';
           @default {
             <router-outlet />
           }
+        }
         }
       </main>
 
@@ -129,6 +152,28 @@ export class ShellComponent {
   protected readonly site = inject(SiteCheckService);
   /** staff may only work on approved shop devices when the owner switched that on */
   protected readonly device = inject(DeviceService);
+  /** live listening: the banner on this device, and the notice staff accept once */
+  protected readonly listen = inject(ListenService);
+  private readonly api = inject(ApiService);
+  private readonly me = liveDoc<Employee>(() =>
+    this.auth.uid() && !this.auth.isOwner() && this.biz.settings().devices.allowListening ? this.biz.docRef('employees', this.auth.uid()) : null,
+  );
+  protected readonly needsNotice = computed(() => {
+    const me = this.me.data();
+    return !!me && !this.auth.isOwner() && this.biz.settings().devices.allowListening && !me.listeningNoticeAt;
+  });
+  protected readonly noticeBusy = signal(false);
+
+  async acceptNotice() {
+    this.noticeBusy.set(true);
+    try {
+      await this.api.call('acceptListeningNotice', {});
+    } catch (err) {
+      this.toast.error(err);
+    } finally {
+      this.noticeBusy.set(false);
+    }
+  }
   protected readonly more = signal(false);
   protected readonly envName = environment.name;
   protected readonly shopCount = computed(() => Object.keys(this.auth.memberships()).length);

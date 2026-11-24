@@ -42,6 +42,16 @@ interface Draft {
       </div>
     }
 
+    @if (exampleItems(); as ex) {
+      @if (ex.products.length) {
+        <div class="alert info row between" style="margin-bottom: 1rem">
+          <span>Your menu still has {{ ex.products.length }} example item(s) from <em>Load example menu</em>
+            ({{ ex.products.slice(0, 3).join(', ') }}{{ ex.products.length > 3 ? '…' : '' }}).</span>
+          <button class="btn danger small" [disabled]="busy()" (click)="removeExample()">Remove example menu</button>
+        </div>
+      }
+    }
+
     <div class="card">
       <div class="card-head">
         <h2>Categories</h2>
@@ -91,7 +101,10 @@ interface Draft {
                       {{ margin(p.priceCents, cost) }}%
                     }
                   </td>
-                  <td><button class="btn small" (click)="edit(p)">Edit</button></td>
+                  <td class="nowrap">
+                    <button class="btn small" (click)="edit(p)">Edit</button>
+                    <button class="btn small ghost" [disabled]="busy()" (click)="remove(p)" title="Delete" [attr.aria-label]="'Delete ' + p.name">🗑</button>
+                  </td>
                 </tr>
               }
             </tbody>
@@ -283,6 +296,45 @@ export class ProductsPage {
       });
       this.toast.ok('Saved');
       this.draft.set(null);
+    } catch (err) {
+      this.toast.error(err);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  /** Items that still look exactly like the example menu (same name and price, unchanged since loading). */
+  protected readonly exampleItems = computed(() => {
+    const starter = new Map(STARTER_PRODUCTS.map((p) => [p.name, p.priceCents]));
+    const starterIngredients = new Map(STARTER_INGREDIENTS.map((i) => [i.name, i.unitCostCents]));
+    const products = this.products.data().filter((p) => starter.get(p.name) === p.priceCents);
+    const ingredients = this.ingredients.data().filter((i) => starterIngredients.get(i.name) === i.unitCostCents);
+    return { products: products.map((p) => p.name), productIds: products.map((p) => p.id), ingredientIds: ingredients.map((i) => i.id) };
+  });
+
+  async removeExample() {
+    const ex = this.exampleItems();
+    const keep = new Set(ex.productIds);
+    // keep stock items still used by products you added yourself
+    const usedElsewhere = new Set(
+      this.recipeList.data().filter((r) => !keep.has(r.productId)).flatMap((r) => r.lines.map((l) => l.ingredientId)),
+    );
+    const ingredients = ex.ingredientIds.filter((id) => !usedElsewhere.has(id));
+    if (!confirm(`Delete ${ex.productIds.length} example menu item(s) and ${ingredients.length} example stock item(s)? Past sales are not affected.`)) return;
+    await this.runDelete({ products: ex.productIds, ingredients }, 'Example menu removed');
+  }
+
+  async remove(p: Product) {
+    if (!confirm(`Delete "${p.name}" and its recipe? Past sales keep their records. To stop selling it for now, untick "Available for sale" instead.`)) return;
+    await this.runDelete({ products: [p.id] }, `Deleted ${p.name}`);
+    if (this.draft()?.id === p.id) this.draft.set(null);
+  }
+
+  private async runDelete(req: { products?: string[]; ingredients?: string[] }, message: string) {
+    this.busy.set(true);
+    try {
+      await this.api.call('deleteCatalog', req);
+      this.toast.ok(message);
     } catch (err) {
       this.toast.error(err);
     } finally {

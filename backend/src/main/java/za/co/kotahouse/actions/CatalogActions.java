@@ -200,6 +200,56 @@ public class CatalogActions {
     if (!(v instanceof Boolean)) throw ApiException.invalid(label + " must be true or false");
   }
 
+  @Operation(summary = "Delete menu items and stock items", description = """
+      Owner only. products: ids to delete (each with its recipe); ingredients: ids to delete. All or nothing. \
+      A stock item still used in the recipe of a product that stays is refused. Past sales, stock movements \
+      and reports keep the names they were recorded with.""")
+  @PostMapping("/deleteCatalog")
+  @Transactional
+  public Map<String, Object> deleteCatalog(@AuthenticationPrincipal Jwt jwt, @RequestBody Map<String, Object> data) {
+    Body d = Body.of(data);
+    Caller owner = ctx.require(jwt, d, "owner");
+    String b = owner.businessId();
+    Set<String> products = new LinkedHashSet<>();
+    Set<String> ingredients = new LinkedHashSet<>();
+    d.list("products").forEach(i -> products.add(String.valueOf(i)));
+    d.list("ingredients").forEach(i -> ingredients.add(String.valueOf(i)));
+    if (products.isEmpty() && ingredients.isEmpty()) throw ApiException.invalid("Choose what to delete");
+    if (products.size() + ingredients.size() > 200) throw ApiException.invalid("Too many at once");
+
+    if (!ingredients.isEmpty()) {
+      for (Map<String, Object> r : store.list(b, za.co.kotahouse.store.Query.of("recipes").limit(1000).build())) {
+        if (products.contains(str(r.get("id")))) continue;
+        if (!(r.get("lines") instanceof List<?> lines)) continue;
+        for (Object l : lines) {
+          if (l instanceof Map<?, ?> m && ingredients.contains(String.valueOf(m.get("ingredientId")))) {
+            String product = store.get(b, "products", str(r.get("id"))).map(p -> str(p.get("name"))).orElse("a product");
+            String ing = store.get(b, "ingredients", String.valueOf(m.get("ingredientId"))).map(i -> str(i.get("name"))).orElse("A stock item");
+            throw ApiException.invalid(ing + " is still in the recipe of " + product + " – remove it there first");
+          }
+        }
+      }
+    }
+
+    int count = 0;
+    for (String id : products) {
+      Map<String, Object> before = store.getForUpdate(b, "products", id).orElse(null);
+      if (before == null) continue;
+      store.delete(b, "products", id);
+      if (store.get(b, "recipes", id).isPresent()) store.delete(b, "recipes", id);
+      audit.record(owner, "products.deleted", "products", id, Map.of("before", before));
+      count++;
+    }
+    for (String id : ingredients) {
+      Map<String, Object> before = store.getForUpdate(b, "ingredients", id).orElse(null);
+      if (before == null) continue;
+      store.delete(b, "ingredients", id);
+      audit.record(owner, "ingredients.deleted", "ingredients", id, Map.of("before", before));
+      count++;
+    }
+    return Map.of("count", count);
+  }
+
   @Operation(summary = "Mark alerts as read", description = "Owner only. ids: the notifications to mark; all: true marks every unread one.")
   @PostMapping("/markNotificationsRead")
   @Transactional

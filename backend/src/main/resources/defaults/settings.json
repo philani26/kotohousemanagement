@@ -88,7 +88,8 @@
   "devices": {
     "lockToApproved": false,
     "awayAlertMinutes": 60,
-    "shareLocation": false
+    "shareLocation": false,
+    "allowListening": false
   },
   "loyalty": {
     "enabled": false,

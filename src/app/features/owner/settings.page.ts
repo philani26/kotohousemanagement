@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { BusinessSettings } from '@shared/models';
 import { isValidPoint } from '@shared/geo';
+import { waPhone } from '@shared/domain';
 import { currentPosition } from '../../core/site-check.service';
 import { centsToRandString, parseRandToCents } from '@shared/money';
 import { BusinessService } from '../../core/business.service';
@@ -29,6 +30,8 @@ interface Form {
   closingChecklist: string;
   email: boolean;
   emailTo: string;
+  whatsapp: boolean;
+  whatsappTo: string;
   cctvProvider: string;
   cctvViewerUrl: string;
   cctvAndroid: string;
@@ -56,6 +59,8 @@ function toForm(s: BusinessSettings): Form {
     closingChecklist: s.closingChecklist.join('\n'),
     email: s.notifications.email,
     emailTo: s.notifications.emailTo.join(', '),
+    whatsapp: s.notifications.whatsapp,
+    whatsappTo: s.notifications.whatsappTo.join(', '),
     cctvProvider: s.cctv.provider,
     cctvViewerUrl: s.cctv.viewerUrl,
     cctvAndroid: s.cctv.androidAppUrl,
@@ -117,10 +122,14 @@ const lines = (t: string) => t.split('\n').map((x) => x.trim()).filter(Boolean);
 
           <div class="card">
             <h2>Notifications</h2>
-            <p class="small muted">Alerts always appear in the app. Email uses the Firebase “Trigger Email” extension (see docs/NOTIFICATIONS.md).</p>
+            <p class="small muted">Alerts always appear in the app. Warning and critical alerts can also go to your email or WhatsApp.</p>
             <label class="check"><input type="checkbox" name="em" [(ngModel)]="f.email" /> Also email warning & critical alerts</label>
             <label class="field"><span>Email to <span class="hint">– comma separated</span></span><input name="et" [(ngModel)]="f.emailTo" /></label>
-            <p class="tiny">WhatsApp alerts need an approved WhatsApp Business API provider and are not switched on yet.</p>
+            <label class="check"><input type="checkbox" name="wa" [(ngModel)]="f.whatsapp" /> Also send warning & critical alerts on WhatsApp</label>
+            <label class="field"><span>WhatsApp numbers <span class="hint">– comma separated, e.g. 082 123 4567</span></span><input name="wt" type="tel" [(ngModel)]="f.whatsappTo" /></label>
+            @if (!biz.settings().whatsapp.phoneNumberId) {
+              <p class="tiny">Alerts are sent from your shop's WhatsApp number – set it up first under <a routerLink="/whatsapp">WhatsApp settings</a>.</p>
+            }
 
             <div class="divider"></div>
             <h2>CCTV</h2>
@@ -323,6 +332,10 @@ export class SettingsPage {
     this.busy.set(true);
     try {
       const categories = lines(f.expenseCategories);
+      const whatsappTo = f.whatsappTo.split(',').map((p) => p.trim()).filter(Boolean);
+      const badPhone = whatsappTo.find((p) => !waPhone(p));
+      if (badPhone) throw new Error(`"${badPhone}" is not a South African mobile number`);
+      if (f.whatsapp && !whatsappTo.length) throw new Error('Add the WhatsApp number(s) that should get alerts');
       if (!categories.length) throw new Error('Add at least one expense category');
       await this.biz.saveSettings({
         businessName: f.businessName.trim() || 'Kota House',
@@ -345,8 +358,8 @@ export class SettingsPage {
         notifications: {
           email: f.email,
           emailTo: f.emailTo.split(',').map((e) => e.trim()).filter(Boolean),
-          whatsapp: false,
-          whatsappTo: [],
+          whatsapp: f.whatsapp,
+          whatsappTo,
         },
         cctv: {
           provider: f.cctvProvider.trim(),

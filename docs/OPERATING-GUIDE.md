@@ -129,3 +129,15 @@ Give the person who prepares food a **Kitchen** login (**Staff** → Role: *Kitc
 
 ### Privacy
 The app does not track anyone's location. CCTV is handled by your camera system (see CCTV.md). Tell staff what is recorded, as POPIA requires.
+
+### Live listening (shop microphone)
+
+Hear what is happening at the counter, live, through a shop phone or tablet.
+
+1. **Before you switch it on:** tell your staff in writing (contract or signed policy) and put up a sign customers can see, e.g. *"Audio and video monitoring in progress"*. South African law (RICA, POPIA) only allows listening when people know.
+2. **Devices → Live listening:** tick both boxes and press *Switch on live listening*.
+3. Each worker sees a notice once at sign-in and presses *I understand*. You can't listen to a device while the worker on it hasn't accepted yet.
+4. **Devices → 🎙 Listen** next to an approved device that is open (seen in the last 5 minutes). The first time, the device asks to allow the microphone; allow it.
+5. While you listen, the device shows a red banner: *"<your name> is listening live on this device"*. Press **Stop** when done. It stops by itself after 30 minutes, or about a minute after you close the page.
+
+Nothing is recorded: the sound only passes through the server to your phone. Every start and stop, and every worker's accepted notice, is in the Activity log. Quality is like a phone call, about 30 MB of mobile data an hour. Kota House must be open on the device; most phones stop the microphone when the screen is off.

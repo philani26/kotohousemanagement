@@ -58,9 +58,22 @@ export interface DeviceSettings {
   awayAlertMinutes: number;
   /** approved shop devices used by staff report where they are while Kota House is open, during trading hours */
   shareLocation: boolean;
+  /** the owner may listen live through shop devices' microphones (staff told, signs up, banner on the device) */
+  allowListening: boolean;
 }
 
-export const DEFAULT_DEVICE_SETTINGS: DeviceSettings = { lockToApproved: false, awayAlertMinutes: 60, shareLocation: false };
+/** businesses/{b}/listenSessions/{deviceId} – tells a device the owner is listening (set by the server). */
+export interface ListenSession {
+  id: string;
+  deviceId: string;
+  active: boolean;
+  sessionId: string;
+  ownerName: string;
+  startedAtMillis: number;
+  endedAtMillis: number | null;
+}
+
+export const DEFAULT_DEVICE_SETTINGS: DeviceSettings = { lockToApproved: false, awayAlertMinutes: 60, shareLocation: false, allowListening: false };
 
 export interface Span {
   from: number;

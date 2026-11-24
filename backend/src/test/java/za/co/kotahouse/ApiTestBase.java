@@ -41,7 +41,7 @@ public abstract class ApiTestBase {
   }
 
   @LocalServerPort
-  int port;
+  protected int port;
 
   @Autowired
   protected JdbcClient db;

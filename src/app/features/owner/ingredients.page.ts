@@ -55,7 +55,10 @@ interface SupDraft {
                   <td class="r">{{ (i.currentQty > 0 ? i.currentQty : 0) | number: '1.0-2' }} {{ i.unit }}</td>
                   <td class="r">{{ i.unitCostCents | zar }}</td>
                   <td class="small">{{ supplierName(i.supplierId) }}</td>
-                  <td><button class="btn small" (click)="editIng(i)">Edit</button></td>
+                  <td class="nowrap">
+                    <button class="btn small" (click)="editIng(i)">Edit</button>
+                    <button class="btn small ghost" [disabled]="busy()" (click)="removeIng(i)" title="Delete" [attr.aria-label]="'Delete ' + i.name">🗑</button>
+                  </td>
                 </tr>
               } @empty {
                 <tr><td colspan="5" class="empty">No ingredients yet</td></tr>
@@ -195,6 +198,20 @@ export class IngredientsPage {
       }
       this.ing.set(null);
     });
+  }
+
+  async removeIng(i: Ingredient) {
+    if (!confirm(`Delete "${i.name}"? Past deliveries and stock history keep their records. To stop using it for now, untick "Active" instead.`)) return;
+    this.busy.set(true);
+    try {
+      await this.api.call('deleteCatalog', { ingredients: [i.id] });
+      this.toast.ok(`Deleted ${i.name}`);
+      if (this.ing()?.id === i.id) this.ing.set(null);
+    } catch (err) {
+      this.toast.error(err);
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   async saveSup() {

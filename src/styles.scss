@@ -206,6 +206,7 @@ table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 th, td { text-align: left; padding: .55rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); font-weight: 600; }
 td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+td.nowrap { white-space: nowrap; }
 tr.dim td { color: var(--ink-3); }
 .list { display: flex; flex-direction: column; }
 .list-item { display: flex; gap: .75rem; align-items: flex-start; padding: .7rem 0; border-bottom: 1px solid var(--line); }
@@ -354,3 +355,12 @@ tr.dim td { color: var(--ink-3); }
 .alert-details .detail.warn dd { color: var(--warn); }
 .alert-details .detail.good dd { color: var(--ok); }
 .product-btn .out-badge { font-size: .7rem; font-weight: 700; color: var(--bad); background: var(--bad-soft); border-radius: 6px; padding: .1rem .4rem; align-self: flex-start; margin-top: .25rem; }
+
+/* live listening: always visible on the device being listened to */
+.listen-banner { display: flex; gap: .75rem; align-items: center; background: #b91c1c; color: #fff; border-radius: 12px; padding: .7rem 1rem; margin-bottom: 1rem; cursor: pointer; }
+.listen-banner .tiny { color: #fecaca; }
+.listen-dot { width: 12px; height: 12px; border-radius: 50%; background: #fff; flex: none; animation: listen-pulse 1.2s ease-in-out infinite; }
+@keyframes listen-pulse { 50% { opacity: .25; } }
+.listen-notice { max-width: 560px; margin: 2rem auto; }
+.listen-meter { height: 10px; border-radius: 6px; background: var(--line, #e5e7eb); overflow: hidden; }
+.listen-meter span { display: block; height: 100%; background: #16a34a; transition: width .15s; }

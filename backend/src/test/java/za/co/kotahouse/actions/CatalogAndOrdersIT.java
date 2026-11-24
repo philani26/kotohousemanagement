@@ -125,4 +125,58 @@ class CatalogAndOrdersIT extends ApiTestBase {
     // linking a sale without a ticket (only extras) is fine
     assertThat(rpc(s, cashier, "linkOrderSale", body("orderId", "noticket1234567890ab", "receiptNo", 9)).<Boolean>get("found")).isFalse();
   }
+
+  @Autowired
+  Notifier notifier;
+
+  @Autowired
+  za.co.kotahouse.settings.SettingsService settingsService;
+
+  @Test
+  void ownerCanSwitchOnWhatsAppAlerts() throws Exception {
+    TestShop s = newShop();
+    String b = s.businessId();
+    Res saved = rpc(s, s.owner(), "saveCatalog", body("writes", List.of(write("businessSettings", null, Map.of(
+        "notifications", Map.of("email", false, "emailTo", List.of(), "whatsapp", true, "whatsappTo", List.of("082 123 4567", "not a number")),
+        "whatsapp", Map.of("phoneNumberId", "109876543210987", "displayNumber", "0821112222", "ordering", false))))));
+    assertThat(saved.status()).isEqualTo(200);
+
+    tx.executeWithoutResult(t -> notifier.notify(b, settingsService.read(b), Notifier.alert("test", "critical", "Till short").message("R50 missing")));
+    tx.executeWithoutResult(t -> notifier.notify(b, settingsService.read(b), Notifier.alert("test", "info", "Just so you know")));
+
+    List<Map<String, Object>> sent = List.of();
+    for (int i = 0; i < 50 && sent.isEmpty(); i++) {
+      Thread.sleep(100);
+      sent = store.list(b, Query.of("whatsappMessages").build());
+    }
+    assertThat(sent).singleElement().satisfies(m -> {
+      assertThat(m).containsEntry("waId", "27821234567").containsEntry("status", "dry-run");
+      assertThat((String) m.get("text")).contains("Till short").contains("R50 missing");
+    });
+  }
+
+  @Test
+  void ownerDeletesMenuAndStockItems() {
+    TestShop s = newShop();
+    Person cashier = addStaff(s, "employee", "Lindi");
+    String b = s.businessId();
+    String bread = rpc(s, s.owner(), "saveCatalog", body("writes", List.of(write("ingredients", null,
+        Map.of("name", "Bread", "unit", "each", "unitCostCents", 450, "openingQty", 0, "reorderLevel", 5, "active", true))))).<List<String>>get("ids").get(0);
+    rpc(s, s.owner(), "saveCatalog", body("writes", List.of(
+        write("products", "dele234567890abcdefa", Map.of("name", "Basic Kota", "category", "kota", "priceCents", 3000, "active", true, "sortOrder", 1)),
+        write("recipes", "dele234567890abcdefa", Map.of("lines", List.of(Map.of("ingredientId", bread, "quantity", 1)))))));
+
+    // staff can't delete; a stock item still in a recipe can't go on its own
+    assertThat(rpc(s, cashier, "deleteCatalog", body("products", List.of("dele234567890abcdefa"))).status()).isEqualTo(403);
+    Res refused = rpc(s, s.owner(), "deleteCatalog", body("ingredients", List.of(bread)));
+    assertThat(refused.status()).isEqualTo(400);
+    assertThat(store.get(b, "ingredients", bread)).isPresent();
+
+    // product, its recipe and the stock item together
+    Res ok = rpc(s, s.owner(), "deleteCatalog", body("products", List.of("dele234567890abcdefa"), "ingredients", List.of(bread)));
+    assertThat(ok.status()).isEqualTo(200);
+    assertThat(store.get(b, "products", "dele234567890abcdefa")).isEmpty();
+    assertThat(store.get(b, "recipes", "dele234567890abcdefa")).isEmpty();
+    assertThat(store.get(b, "ingredients", bread)).isEmpty();
+  }
 }

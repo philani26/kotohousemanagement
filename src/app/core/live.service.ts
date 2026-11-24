@@ -106,7 +106,7 @@ export class LiveService {
 }
 
 /** Minimal text/event-stream reader. */
-async function readEvents(body: ReadableStream<Uint8Array>, onEvent: (event: string, data: string) => void) {
+export async function readEvents(body: ReadableStream<Uint8Array>, onEvent: (event: string, data: string) => void) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';

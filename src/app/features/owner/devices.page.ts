@@ -1,4 +1,6 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { AuthService } from '../../core/auth.service';
+import { ListenPlayer } from '../../core/listen-player';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { orderBy, query, where } from '../../core/db';
@@ -35,6 +37,48 @@ import { ToastService } from '../../core/toast.service';
         Tell your staff about these checks (POPIA).
       </p>
     </form>
+
+    <form class="card" (ngSubmit)="saveListening()">
+      <div class="card-head">
+        <h2>🎙 Live listening</h2>
+        <span class="badge" [class.ok]="biz.settings().devices.allowListening">{{ biz.settings().devices.allowListening ? 'On' : 'Off' }}</span>
+      </div>
+      <p class="small muted">
+        Hear what is happening at the counter, live, through a shop phone or tablet's microphone – press <strong>🎙 Listen</strong> next to a
+        device below. It is open, never hidden: the device shows a red “owner is listening” banner the whole time, each worker accepts a notice
+        once, every session is in the Activity log, and nothing is recorded.
+      </p>
+      <p class="small muted">
+        South African law (RICA and POPIA) only allows this when people know: tell your staff in writing (e.g. in their contract or a signed
+        policy) and put up a sign customers can see, such as “Audio and video monitoring in progress”.
+      </p>
+      @if (!biz.settings().devices.allowListening) {
+        <label class="check"><input type="checkbox" name="toldStaff" [(ngModel)]="toldStaff" /> I have told my staff in writing</label>
+        <label class="check"><input type="checkbox" name="sign" [(ngModel)]="signUp" /> There is a sign for customers at the shop</label>
+        <button class="btn primary" [disabled]="busy() || !toldStaff || !signUp">Switch on live listening</button>
+      } @else {
+        <button class="btn" [disabled]="busy()">Switch off</button>
+      }
+    </form>
+
+    @if (listening(); as l) {
+      <div class="card" style="border: 2px solid #b91c1c">
+        <div class="card-head">
+          <h2>🎙 Listening to {{ l.label }}</h2>
+          <button class="btn danger" (click)="stopListening()">Stop</button>
+        </div>
+        <p class="small">
+          @switch (l.player.state()) {
+            @case ('connecting') { Connecting… }
+            @case ('waiting') { Waiting for the device's microphone… (Kota House must be open on it, and the microphone allowed) }
+            @case ('live') { <strong style="color: #16a34a">● Live</strong> – turn your volume up }
+            @case ('ended') { Ended }
+          }
+        </p>
+        <div class="listen-meter"><span [style.width.%]="l.player.level() * 100"></span></div>
+        <p class="tiny" style="margin-top: .5rem">Stops by itself after {{ l.maxMinutes }} minutes. Phone-call quality, about 30 MB of data an hour.</p>
+      </div>
+    }
 
     <form class="card" (ngSubmit)="createInvite()">
       <h2>Add a device</h2>
@@ -93,6 +137,10 @@ import { ToastService } from '../../core/toast.service';
                     }
                     @if (d.status !== 'blocked') {
                       <button class="btn small" (click)="set(d, 'blocked')">Block</button>
+                    }
+                    @if (biz.settings().devices.allowListening && d.status === 'approved' && d.code !== myCode) {
+                      <button class="btn small" [disabled]="busy() || listening()?.deviceId === d.id" (click)="startListening(d)"
+                        [title]="online(d) ? 'Listen live' : 'Not seen in the last 5 minutes'">🎙 Listen</button>
                     }
                     @if (renaming() === d.id) {
                       <button class="btn small" (click)="rename(d)">Save name</button>
@@ -158,6 +206,11 @@ export class DevicesPage {
   protected lock = false;
   protected awayMinutes = 60;
   protected shareLocation = false;
+  private allowListening = false;
+  protected toldStaff = false;
+  protected signUp = false;
+  private readonly auth = inject(AuthService);
+  protected readonly listening = signal<{ deviceId: string; label: string; maxMinutes: number; player: ListenPlayer } | null>(null);
   private loaded = false;
   protected readonly day = signal(this.biz.today());
   protected readonly limitMs = computed(() => this.biz.settings().devices.awayAlertMinutes * 60_000);
@@ -185,7 +238,55 @@ export class DevicesPage {
       this.lock = s.devices.lockToApproved;
       this.awayMinutes = s.devices.awayAlertMinutes;
       this.shareLocation = s.devices.shareLocation;
+      this.allowListening = s.devices.allowListening;
     });
+    inject(DestroyRef).onDestroy(() => void this.stopListening());
+  }
+
+  protected online(d: ShopDevice) {
+    return !!d.lastSeenMillis && Date.now() - d.lastSeenMillis < 5 * 60_000;
+  }
+
+  async saveListening() {
+    const on = !this.biz.settings().devices.allowListening;
+    this.busy.set(true);
+    try {
+      await this.biz.saveSettings({ devices: { ...this.biz.settings().devices, allowListening: on } });
+      this.allowListening = on;
+      this.toast.ok(on ? 'Live listening is on – staff accept the notice at their next sign-in' : 'Live listening is off');
+      if (!on) await this.stopListening();
+    } catch (err) {
+      this.toast.error(err);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async startListening(d: ShopDevice) {
+    // the player is created straight from the tap, so the browser lets it play sound
+    const player = new ListenPlayer(this.auth);
+    await this.stopListening();
+    this.busy.set(true);
+    try {
+      const res = await this.api.call('startListening', { targetDevice: d.id });
+      this.listening.set({ deviceId: d.id, label: d.label, maxMinutes: res.maxMinutes, player });
+      player.connect(this.auth.businessId()!, res.sessionId, () => {
+        if (this.listening()?.player === player) this.listening.set(null);
+      });
+    } catch (err) {
+      player.close();
+      this.toast.error(err);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async stopListening() {
+    const l = this.listening();
+    if (!l) return;
+    this.listening.set(null);
+    l.player.close();
+    await this.api.call('stopListening', { targetDevice: l.deviceId }).catch(() => undefined);
   }
 
   protected duration(ms: number) {
@@ -207,7 +308,7 @@ export class DevicesPage {
   async saveSettings() {
     this.busy.set(true);
     try {
-      await this.biz.saveSettings({ devices: { lockToApproved: this.lock, awayAlertMinutes: Math.max(0, Math.min(600, Math.round(Number(this.awayMinutes) || 0))), shareLocation: this.shareLocation } });
+      await this.biz.saveSettings({ devices: { allowListening: this.allowListening, lockToApproved: this.lock, awayAlertMinutes: Math.max(0, Math.min(600, Math.round(Number(this.awayMinutes) || 0))), shareLocation: this.shareLocation } });
       this.toast.ok(this.lock ? 'Staff can now only work on approved devices' : 'Saved');
     } catch (err) {
       this.toast.error(err);

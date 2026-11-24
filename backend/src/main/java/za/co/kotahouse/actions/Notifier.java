@@ -4,7 +4,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import za.co.kotahouse.whatsapp.WhatsApp;
 import za.co.kotahouse.auth.Mailer;
 import za.co.kotahouse.common.AfterCommit;
 import za.co.kotahouse.settings.Settings;
@@ -22,10 +27,20 @@ public class Notifier {
 
   private final Store store;
   private final Mailer mailer;
+  /** lazy: WhatsApp itself raises alerts through this class */
+  private final ObjectProvider<WhatsApp> whatsapp;
+  /** WhatsApp sends call Meta over the network, so they run off the request thread */
+  private final ExecutorService background = Executors.newVirtualThreadPerTaskExecutor();
 
-  public Notifier(Store store, Mailer mailer) {
+  public Notifier(Store store, Mailer mailer, ObjectProvider<WhatsApp> whatsapp) {
     this.store = store;
     this.mailer = mailer;
+    this.whatsapp = whatsapp;
+  }
+
+  @jakarta.annotation.PreDestroy
+  void stop() {
+    background.shutdown();
   }
 
   /** One line of an alert's details; tone: good, warn, bad (or null). */
@@ -131,15 +146,30 @@ public class Notifier {
     if (n.link() != null) doc.put("link", n.link());
     store.set(businessId, COLLECTION, docId, doc);
 
+    if ("info".equals(n.severity())) return;
+    StringBuilder text = new StringBuilder(n.message()).append("\n\n");
+    for (Map<String, Object> d : details) text.append(d.get("label")).append(": ").append(d.get("value")).append('\n');
+    if (n.actorName() != null) text.append("By: ").append(n.actorName()).append('\n');
+    if (n.action() != null) text.append("\nWhat to do: ").append(n.action()).append('\n');
+    text.append("\nOpen the Kota House dashboard to review.");
+
     List<String> to = settings.emailTo();
-    if (settings.flag("notifications", "email") && !to.isEmpty() && !"info".equals(n.severity())) {
-      StringBuilder text = new StringBuilder(n.message()).append("\n\n");
-      for (Map<String, Object> d : details) text.append(d.get("label")).append(": ").append(d.get("value")).append('\n');
-      if (n.actorName() != null) text.append("By: ").append(n.actorName()).append('\n');
-      if (n.action() != null) text.append("\nWhat to do: ").append(n.action()).append('\n');
-      text.append("\nOpen the Kota House dashboard to review.");
+    if (settings.flag("notifications", "email") && !to.isEmpty()) {
       String subject = "[" + settings.businessName() + "] " + n.title();
       AfterCommit.run(() -> to.forEach(addr -> mailer.send(addr, subject, text.toString())));
+    }
+
+    List<String> phones = settings.whatsappTo();
+    String phoneNumberId = settings.text("whatsapp", "phoneNumberId");
+    if (settings.flag("notifications", "whatsapp") && !phones.isEmpty() && !phoneNumberId.isEmpty()) {
+      String message = ("critical".equals(n.severity()) ? "🚨 " : "⚠️ ") + "*" + settings.businessName() + ": " + n.title() + "*\n" + text;
+      AfterCommit.run(() -> background.execute(() -> phones.forEach(p -> {
+        try {
+          whatsapp.getObject().send(businessId, phoneNumberId, p, message);
+        } catch (RuntimeException e) {
+          LoggerFactory.getLogger(Notifier.class).error("WhatsApp alert to {} failed", p, e);
+        }
+      })));
     }
   }
 }
