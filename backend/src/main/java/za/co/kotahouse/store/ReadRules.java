@@ -83,6 +83,8 @@ public final class ReadRules {
     RULES.put("expenses", ownerOrOwn(STAFF, "submittedBy"));
     RULES.put("approvals", ownerOrOwn(STAFF, "requestedBy"));
     RULES.put("stockMovements", ownerOrOwn(STAFF, "createdBy"));
+    // any cashier can see and settle a run (the one who settles may not be the one who issued it)
+    RULES.put("sellerRuns", roles(STAFF));
     RULES.put("purchases", ownerOrOwn(STAFF, "createdBy"));
     RULES.put("timeEntries", ownerOrOwn(ANYONE, "uid"));
     RULES.put("customers", getStaffListOwner());

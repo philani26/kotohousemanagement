@@ -20,6 +20,7 @@ export const routes: Routes = [
       { path: 'expenses', title: 'Expenses', loadComponent: () => import('./features/expenses/expenses.page').then((m) => m.ExpensesPage) },
       { path: 'hours', title: 'Hours', loadComponent: () => import('./features/hours/hours.page').then((m) => m.HoursPage) },
       { path: 'stock', title: 'Stock', loadComponent: () => import('./features/stock/stock.page').then((m) => m.StockPage) },
+      { path: 'sellers', title: 'Mobile sellers', loadComponent: () => import('./features/sellers/sellers.page').then((m) => m.SellersPage) },
       // Owner only (also enforced by security rules and functions)
       {
         path: '',

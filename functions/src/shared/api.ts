@@ -111,6 +111,16 @@ export interface Api {
   stopListening: [{ targetDevice: string }, { ok: boolean }];
   acceptListeningNotice: [Record<string, never>, { ok: boolean }];
   deleteCatalog: [{ products?: string[]; ingredients?: string[] }, { count: number }];
+  /** hand stock to a mobile seller: prices the kotas and takes their ingredients out of stock */
+  issueSellerRun: [
+    { sellerName: string; sellerPhone?: string; lines: { productId: string; quantity: number }[] },
+    { runId: string },
+  ];
+  /** reconcile a seller's run: count what came back, work out cash due and any shortfall */
+  settleSellerRun: [
+    { runId: string; returns: { productId: string; returnedQty: number }[]; cashReceivedCents: Cents },
+    { soldValueCents: Cents; cashReceivedCents: Cents; shortfallCents: Cents },
+  ];
   markNotificationsRead: [{ ids?: string[]; all?: boolean }, { count: number }];
   /** kitchen tickets (Java backend); safe to repeat, so they can wait in the offline queue */
   createOrder: [{ orderId: string; lines: { name: string; quantity: number }[]; note?: string; receiptNo: number | null; createdAtMillis: number }, { ok: true; duplicate: boolean }];

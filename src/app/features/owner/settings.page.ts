@@ -23,6 +23,7 @@ interface Form {
   discountAlertPercent: number;
   wastageAlert: string;
   stockVarianceAlert: string;
+  sellerShortfall: string;
   noSaleMinutes: number;
   missingCloseGraceMinutes: number;
   expenseCategories: string;
@@ -52,6 +53,7 @@ function toForm(s: BusinessSettings): Form {
     discountAlertPercent: s.thresholds.discountAlertPercent,
     wastageAlert: r(s.thresholds.wastageAlertCents),
     stockVarianceAlert: r(s.thresholds.stockVarianceAlertCents),
+    sellerShortfall: r(s.thresholds.sellerShortfallCents),
     noSaleMinutes: s.thresholds.noSaleMinutes,
     missingCloseGraceMinutes: s.thresholds.missingCloseGraceMinutes,
     expenseCategories: s.expenseCategories.join('\n'),
@@ -106,6 +108,7 @@ const lines = (t: string) => t.split('\n').map((x) => x.trim()).filter(Boolean);
               <label class="field"><span>Discount from (%)</span><input name="t3" type="number" [(ngModel)]="f.discountAlertPercent" /></label>
               <label class="field"><span>Daily wastage over (R)</span><input name="t4" inputmode="decimal" [(ngModel)]="f.wastageAlert" /></label>
               <label class="field"><span>Stock count variance over (R)</span><input name="t5" inputmode="decimal" [(ngModel)]="f.stockVarianceAlert" /></label>
+              <label class="field"><span>Mobile seller short by over (R)</span><input name="t8" inputmode="decimal" [(ngModel)]="f.sellerShortfall" /></label>
               <label class="field"><span>No sales for (minutes)</span><input name="t6" type="number" min="30" [(ngModel)]="f.noSaleMinutes" /></label>
               <label class="field"><span>Missing close after (minutes past closing)</span><input name="t7" type="number" min="15" [(ngModel)]="f.missingCloseGraceMinutes" /></label>
             </div>
@@ -349,6 +352,7 @@ export class SettingsPage {
           discountAlertPercent: clamp(f.discountAlertPercent, 0, 100),
           wastageAlertCents: money(f.wastageAlert, 'Wastage alert'),
           stockVarianceAlertCents: money(f.stockVarianceAlert, 'Stock variance alert'),
+          sellerShortfallCents: money(f.sellerShortfall, 'Seller shortfall alert'),
           noSaleMinutes: clamp(f.noSaleMinutes, 30, 1440),
           missingCloseGraceMinutes: clamp(f.missingCloseGraceMinutes, 15, 600),
         },

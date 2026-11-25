@@ -70,6 +70,7 @@ export const COLLECTIONS = {
   customers: 'customers',
   yocoCheckouts: 'yocoCheckouts',
   cardTransactions: 'cardTransactions',
+  sellerRuns: 'sellerRuns',
   private: 'private',
   deviceInvites: 'deviceInvites',
 } as const;
@@ -187,7 +188,10 @@ export type StockMovementType =
   | 'wastage'
   | 'staffMeal'
   | 'complimentary'
-  | 'adjustment';
+  | 'adjustment'
+  /** stock taken out with a mobile seller, and the part brought back */
+  | 'sellerOut'
+  | 'sellerReturn';
 
 /** Movement types an employee may record directly. */
 export const EMPLOYEE_STOCK_TYPES: readonly StockMovementType[] = ['wastage', 'staffMeal', 'complimentary'];
@@ -206,7 +210,7 @@ export interface StockMovement {
   reason?: string;
   /** quantity that could not be taken because stock had run out */
   shortfallQty?: number;
-  refType?: 'sale' | 'purchase' | 'approval' | 'ingredient';
+  refType?: 'sale' | 'purchase' | 'approval' | 'ingredient' | 'seller';
   refId?: string;
   shiftId?: string | null;
   createdBy: string;
@@ -301,6 +305,49 @@ export interface Sale {
     decidedAt?: TimestampLike;
   };
   createdAt: TimestampLike;
+  dayKey: string;
+}
+
+export type SellerRunStatus = 'out' | 'settled';
+
+export interface SellerRunLine {
+  productId: string;
+  name: string;
+  /** how many were taken out for sale */
+  quantity: number;
+  unitPriceCents: Cents;
+  /** quantity × unitPrice */
+  lineTotalCents: Cents;
+  /** set at settlement: how many came back */
+  returnedQty?: number;
+  /** set at settlement: taken − returned */
+  soldQty?: number;
+}
+
+/** businesses/{b}/sellerRuns/{id} – stock handed to a mobile ("outside") seller and reconciled on return. */
+export interface SellerRun {
+  id: string;
+  sellerName: string;
+  sellerPhone?: string;
+  status: SellerRunStatus;
+  lines: SellerRunLine[];
+  /** full selling value of everything taken out */
+  takenValueCents: Cents;
+  /** ingredient cost of everything taken out */
+  takenCostCents: Cents;
+  shiftId?: string | null;
+  issuedBy: string;
+  issuedByName: string;
+  issuedAt: TimestampLike;
+  /** settlement: value of what was sold (taken − returned, at menu price) */
+  soldValueCents?: Cents;
+  /** settlement: cash the seller handed in */
+  cashReceivedCents?: Cents;
+  /** soldValue − cashReceived; positive means the seller is short */
+  shortfallCents?: Cents;
+  settledBy?: string;
+  settledByName?: string;
+  settledAt?: TimestampLike;
   dayKey: string;
 }
 
@@ -531,6 +578,8 @@ export interface AlertThresholds {
   wastageAlertCents: Cents;
   /** stock count variance value that triggers an alert */
   stockVarianceAlertCents: Cents;
+  /** a mobile seller's cash shortfall (sold value − cash handed in) that triggers an alert */
+  sellerShortfallCents: Cents;
   /** minutes without a sale during trading hours before alerting */
   noSaleMinutes: number;
   /** minutes after closing time before a missing close is reported */
@@ -627,6 +676,7 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
     discountAlertPercent: 10,
     wastageAlertCents: 5000,
     stockVarianceAlertCents: 5000,
+    sellerShortfallCents: 2000,
     noSaleMinutes: 120,
     missingCloseGraceMinutes: 60,
   },

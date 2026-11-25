@@ -11,6 +11,7 @@ export const STAFF_NAV: NavItem[] = [
   { path: '/shift', label: 'Shift', ico: '⏱️', group: 'Shop' },
   { path: '/sales', label: 'Sales', ico: '🧾', group: 'Shop' },
   { path: '/stock', label: 'Stock', ico: '📦', group: 'Shop' },
+  { path: '/sellers', label: 'Sellers', ico: '🏃', group: 'Shop' },
   { path: '/expenses', label: 'Expenses', ico: '💸', group: 'Shop' },
   { path: '/hours', label: 'Hours', ico: '🕐', group: 'Shop' },
 ];

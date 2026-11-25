@@ -30,6 +30,8 @@ const MOVEMENT_LABELS: Record<StockMovement['type'], string> = {
   staffMeal: 'Staff meal',
   complimentary: 'Complimentary',
   adjustment: 'Adjustment',
+  sellerOut: 'Taken by seller',
+  sellerReturn: 'Returned by seller',
 };
 
 @Component({

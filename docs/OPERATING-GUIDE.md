@@ -141,3 +141,14 @@ Hear what is happening at the counter, live, through a shop phone or tablet.
 5. While you listen, the device shows a red banner: *"<your name> is listening live on this device"*. Press **Stop** when done. It stops by itself after 30 minutes, or about a minute after you close the page.
 
 Nothing is recorded: the sound only passes through the server to your phone. Every start and stop, and every worker's accepted notice, is in the Activity log. Quality is like a phone call, about 30 MB of mobile data an hour. Kota House must be open on the device; most phones stop the microphone when the screen is off.
+
+### Mobile sellers (kotas sold on the road)
+
+Hand kotas to someone selling away from the shop (a hawker, a school run, an event) and reconcile the cash and stock when they come back.
+
+1. **Sellers → New run:** type the seller's name (and cellphone, optional), enter how many of each kota they are taking, and press *Send out*. The kotas are priced from the menu and their ingredients come out of stock straight away, exactly as a sale would.
+2. The run shows under **Out now** with the full value taken out.
+3. **When the seller returns, Sellers → Out now → Count back & settle:** enter how many of each kota came back. The app works out what was sold (taken − returned) and the cash due, then you enter the cash the seller handed in.
+4. The returned kotas go back into stock. If the cash is short of the value sold, the amount is shown and — above your alert limit (Settings → *Mobile seller short by over*) — the owner gets an alert.
+
+Any cashier can start a run and any cashier can settle it (the one who settles need not be the one who sent the seller out). Every run is in **History** and in the Activity log. A seller run is its own tally: it does not go through the till's cash-up, so it never affects a shift's expected cash.

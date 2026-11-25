@@ -20,6 +20,7 @@
     "discountAlertPercent": 10,
     "wastageAlertCents": 5000,
     "stockVarianceAlertCents": 5000,
+    "sellerShortfallCents": 2000,
     "noSaleMinutes": 120,
     "missingCloseGraceMinutes": 60
   },
