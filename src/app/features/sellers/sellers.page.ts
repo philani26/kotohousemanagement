@@ -73,7 +73,7 @@ type Tab = 'out' | 'new' | 'history';
                 </div>
                 <label class="field">
                   <span>Cash handed in</span>
-                  <input inputmode="decimal" [(ngModel)]="cashText" placeholder="0.00" />
+                  <input inputmode="decimal" [ngModel]="cashText()" (ngModelChange)="cashText.set($event)" placeholder="0.00" />
                 </label>
                 @if (cashCents() !== null) {
                   <div class="row" [class.bad]="shortfall(run) > 0" [class.good]="shortfall(run) < 0">
@@ -240,17 +240,17 @@ export class SellersPage {
   // ---- settle ----
   protected readonly settling = signal<string | null>(null);
   protected readonly back = signal<Record<string, string>>({});
-  protected cashText = '';
+  protected readonly cashText = signal('');
 
   protected startSettle(run: SellerRun) {
     this.settling.set(run.id);
     this.back.set({});
-    this.cashText = '';
+    this.cashText.set('');
   }
   protected cancelSettle() {
     this.settling.set(null);
     this.back.set({});
-    this.cashText = '';
+    this.cashText.set('');
   }
   protected setBack(id: string, v: string) {
     this.back.update((t) => ({ ...t, [id]: v }));
@@ -266,7 +266,7 @@ export class SellersPage {
   protected soldValue(run: SellerRun): number {
     return run.lines.reduce((s, l) => s + (l.quantity - this.backOf(l)) * l.unitPriceCents, 0);
   }
-  protected readonly cashCents = computed(() => (this.cashText.trim() ? parseRandToCents(this.cashText) : null));
+  protected readonly cashCents = computed(() => (this.cashText().trim() ? parseRandToCents(this.cashText()) : null));
   protected shortfall(run: SellerRun): number {
     return this.soldValue(run) - (this.cashCents() ?? 0);
   }
